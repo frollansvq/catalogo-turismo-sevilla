@@ -390,6 +390,7 @@
 <aside class="panel" id="panel"></aside>
 <div id="configModalRoot"></div>
 <div id="importModalRoot"></div>
+<div id="previewModalRoot"></div>
 </div>
 
 <script>
@@ -2431,7 +2432,10 @@
 
     panel.innerHTML =
       '<div class="panel-head"><h2>'+(ui.editingId?"Editar ficha":"Nueva ficha")+'</h2>'+
-      '<button class="icon-btn" id="panelCloseBtn" title="Cerrar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'+
+      '<div style="display:flex;gap:4px">'+
+      '<button class="icon-btn" id="panelPreviewBtn" title="Ver cómo se publica esta ficha"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>'+
+      '<button class="icon-btn" id="panelCloseBtn" title="Cerrar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'+
+      '</div></div>'+
       '<div class="panel-body">'+
         '<div class="field"><label>Ámbito</label><select id="f_pool">'+poolOptions+'</select></div>'+
         '<div class="field"><label class="attr-check"><input type="checkbox" id="f_esempresa" '+(draft.esEmpresa?"checked":"")+'>¿Es una empresa? <span class="hint">(un negocio o entidad que presta servicio — agencia, hotel, comercio, asociación... a diferencia de un recurso físico como un monumento o una plaza)</span></label></div>'+
@@ -2505,6 +2509,10 @@
 
     document.getElementById("panelCloseBtn").addEventListener("click", closePanel);
     document.getElementById("panelCancelBtn").addEventListener("click", closePanel);
+    document.getElementById("panelPreviewBtn").addEventListener("click", function(){
+      syncFormFieldsToDraft();
+      openRecordPreview(draft);
+    });
     document.getElementById("f_pool").addEventListener("change", function(e){
       syncFormFieldsToDraft();
       draft.pool = e.target.value; draft.classCode=""; draft.className=""; draft.classUri="";
@@ -2938,6 +2946,28 @@
     bindConfigEvents();
   }
   function closeConfig(){ document.getElementById("configModalRoot").innerHTML = ""; }
+  /* Vista previa "cómo se publica" (14/09/2026, a petición de Federico: "poner un icono de ojo
+     para ver lo que está publicado") — reutiliza exactamente la misma tarjeta y el mismo CSS que
+     genera «Exportar → HTML — catálogo (solo lectura)» (ver recordCardHtml/catalogCardCss más
+     abajo), para que lo que se ve aquí sea fielmente lo que saldría en ese archivo. Se abre desde
+     el propio panel de edición, después de un syncFormFieldsToDraft() — así refleja también los
+     cambios que aún no se han guardado, para poder revisarlos antes de decidir guardar. */
+  function openRecordPreview(record){
+    var root = document.getElementById("previewModalRoot");
+    var chipClass = record.pool==="organizacion" ? "gold" : "neutral";
+    var ci = classInfo(record.pool, record.classCode);
+    var label = (ci ? ci.label : record.className) || "Sin categoría";
+    root.innerHTML = '<div class="config-modal" id="previewModalBackdrop"><div class="config-card" style="max-width:440px">'+
+      '<div class="config-head"><h2 style="margin:0;font-size:16px">Vista previa — cómo se publica</h2>'+
+      '<button class="icon-btn" id="previewCloseBtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'+
+      '<div class="config-body"><style>'+catalogCardCss()+'</style>'+
+      '<div class="catalog-scope"><div class="cards" style="grid-template-columns:1fr">'+recordCardHtml(record, chipClass, label)+'</div></div>'+
+      '<p class="hint" style="margin-top:12px">Así se vería en «Exportar → HTML — catálogo (solo lectura)». Si tienes cambios sin guardar en el formulario, ya están reflejados aquí.</p>'+
+      '</div></div></div>';
+    document.getElementById("previewModalBackdrop").addEventListener("click", function(e){ if(e.target===e.currentTarget) closeRecordPreview(); });
+    document.getElementById("previewCloseBtn").addEventListener("click", closeRecordPreview);
+  }
+  function closeRecordPreview(){ document.getElementById("previewModalRoot").innerHTML = ""; }
   function usageCount(pool, code){ return state.records.filter(function(r){return r.pool===pool && r.classCode===code;}).length; }
   /* Desde que "religioso" dejó de ser un ámbito (27/08/2026), el uso real de una categoría religiosa
      ya no se mide por pool+classCode (nadie tiene ya pool "religioso") sino por si aparece en la
@@ -3772,75 +3802,144 @@
     });
     return rows.join("\n");
   }
+  /* ---------- Tarjeta de recurso: fuente única compartida por dos sitios (14/09/2026, a
+     petición de Federico: "poner un icono de ojo [en el panel de la ficha] para ver lo que
+     está publicado", y añadir filtro por categoría al catálogo exportado) — antes esta lógica
+     solo existía dentro de toHtmlSnapshot(); ahora vive aquí para poder reutilizarla también en
+     la vista previa de una sola ficha desde dentro del panel de edición, sin duplicar el HTML de
+     la tarjeta en dos sitios que se puedan desincronizar. catalogCardCss() es el mismo motivo:
+     una única hoja de estilos "portátil" (con sus reglas bajo el prefijo .catalog-scope) que se
+     puede incrustar tanto en el documento exportado como dentro del modal de vista previa del
+     panel, sin chocar con el resto del CSS de la propia herramienta. */
+  function catalogCardCss(){
+    return '.catalog-scope{--cs-ink:#171510;--cs-ink-soft:#5b5548;--cs-ink-faint:#948d7c;--cs-ground:#f6f4ee;--cs-surface:#fff;--cs-surface-alt:#eeeadd;--cs-line:#ddd6c2;--cs-gold:#b98a1f;--cs-gold-ink:#7c5b12;--cs-gold-soft:#f6ecd2;--cs-teal:#0f6f6a;--cs-teal-ink:#0b4f4c;--cs-teal-soft:#dff0ee;color:var(--cs-ink);font-family:"Public Sans",-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.55}'+
+      '@media(prefers-color-scheme:dark){.catalog-scope:not([data-force-light]){--cs-ink:#f3efe2;--cs-ink-soft:#c3bca8;--cs-ink-faint:#8f8874;--cs-ground:#0e0d0a;--cs-surface:#18160f;--cs-surface-alt:#211e14;--cs-line:#332f22;--cs-gold:#e0b23f;--cs-gold-ink:#f3cf74;--cs-gold-soft:#2c2312;--cs-teal:#4fc0ba;--cs-teal-ink:#8fdcd7;--cs-teal-soft:#12302e}}'+
+      '.catalog-scope *{box-sizing:border-box}'+
+      '.catalog-scope h1{font-family:"Manrope",sans-serif;font-weight:800;font-size:26px;margin:0 0 4px}'+
+      '.catalog-scope .sub{color:var(--cs-ink-faint);font-size:13px;margin:0 0 18px}'+
+      '.catalog-scope h2{font-family:"Manrope",sans-serif;font-size:17px;margin:0 0 14px;display:flex;align-items:center;gap:8px}'+
+      '.catalog-scope .count{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--cs-ink-faint);font-weight:500}'+
+      '.catalog-scope section{margin-bottom:36px}'+
+      '.catalog-scope .filter-bar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 24px;position:sticky;top:0;background:var(--cs-ground);padding:10px 0;z-index:5}'+
+      '.catalog-scope .filter-chip{font:inherit;font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:99px;border:1px solid var(--cs-line);background:var(--cs-surface);color:var(--cs-ink-soft);cursor:pointer;white-space:nowrap;transition:background .12s,color .12s,border-color .12s}'+
+      '.catalog-scope .filter-chip:hover{background:var(--cs-surface-alt)}'+
+      '.catalog-scope .filter-chip.active{background:var(--cs-teal);border-color:var(--cs-teal);color:#fff}'+
+      '.catalog-scope .filter-chip .n{opacity:.75;font-family:"IBM Plex Mono",monospace;font-size:10.5px;margin-left:4px}'+
+      '.catalog-scope .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px}'+
+      '.catalog-scope .card{background:var(--cs-surface);border:1px solid var(--cs-line);border-radius:14px;padding:16px;overflow:hidden;transition:box-shadow .15s,transform .15s}'+
+      '.catalog-scope .cards .card:hover{box-shadow:0 10px 26px -12px rgba(23,21,16,.28);transform:translateY(-2px)}'+
+      '.catalog-scope .card-img{width:calc(100% + 32px);margin:-16px -16px 12px;display:block;height:180px;object-fit:cover;background:var(--cs-surface-alt);cursor:zoom-in}'+
+      '.catalog-scope .card header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}'+
+      '.catalog-scope .card h3{font-family:"Manrope",sans-serif;font-size:14.5px;margin:0}'+
+      '.catalog-scope .desc{font-size:12.8px;color:var(--cs-ink-soft);margin:0 0 10px}'+
+      '.catalog-scope .chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap;flex:none}'+
+      '.catalog-scope .chip.gold{background:var(--cs-gold-soft);color:var(--cs-gold-ink)}.catalog-scope .chip.teal{background:var(--cs-teal-soft);color:var(--cs-teal-ink)}.catalog-scope .chip.neutral{background:var(--cs-surface-alt);color:var(--cs-ink-soft);border:1px solid var(--cs-line)}'+
+      '.catalog-scope dl{margin:0 0 10px;font-size:12.3px}.catalog-scope dl div{display:flex;gap:6px;padding:2px 0}.catalog-scope dt{color:var(--cs-ink-faint);min-width:110px;flex:none}.catalog-scope dd{margin:0;word-break:break-word}'+
+      '.catalog-scope .mono{font-family:"IBM Plex Mono",monospace;font-size:11px}'+
+      '.catalog-scope .tags{display:flex;flex-wrap:wrap;gap:5px}.catalog-scope .tag{font-size:10.8px;background:var(--cs-surface-alt);border:1px solid var(--cs-line);color:var(--cs-ink-soft);padding:2px 8px;border-radius:99px}'+
+      '.catalog-scope .translations{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;padding:8px 10px;background:var(--cs-teal-soft);border-radius:8px}'+
+      '.catalog-scope .translation{font-size:11.5px;color:var(--cs-teal-ink)}.catalog-scope .lang-tag{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:700;background:var(--cs-surface);border:1px solid var(--cs-line);border-radius:4px;padding:1px 4px;margin-right:4px}'+
+      '.catalog-scope .lightbox{position:fixed;inset:0;background:rgba(10,9,6,.86);display:flex;align-items:center;justify-content:center;padding:26px;z-index:999;cursor:zoom-out}'+
+      '.catalog-scope .lightbox img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)}';
+  }
+  function recordCardHtml(r, chipClass, cardClassLabel){
+    var ci = classInfo(r.pool, r.classCode);
+    var tags = (r.attributes||[]).map(attrLabel);
+    var addr = formatAddress(r);
+    var translationsBlock = LANGS.map(function(l){
+      var t = (r.translations && r.translations[l.code]) || {};
+      if(!t.name && !t.description) return "";
+      return '<div class="translation"><span class="lang-tag">'+esc(l.code.toUpperCase())+'</span> '+
+        (t.name?'<b>'+esc(t.name)+'</b>':'')+(t.description?' — '+esc(t.description):'')+'</div>';
+    }).join("");
+    var socialLinks = (r.socialMedia||[]).filter(function(s){return s.platform||s.handle;})
+      .map(function(s){ return '<span class="tag">'+esc(s.platform||"")+(s.handle?': '+esc(s.handle):'')+'</span>'; }).join("");
+    return '<article class="card" data-cardclass="'+esc(cardClassLabel||"")+'">'+
+      (r.mainImage?'<img class="card-img" src="'+esc(r.mainImage)+'" alt="" loading="lazy">':'')+
+      '<header><h3>'+esc(r.name||"(sin nombre)")+'</h3><span class="chip '+chipClass+'">'+esc(ci?ci.label:(r.classLabel||""))+'</span></header>'+
+      (r.description?'<p class="desc">'+esc(r.description)+'</p>':'')+
+      '<dl>'+
+        (addr?'<div><dt>Dirección</dt><dd>'+esc(addr)+(hasCoords(r)?' · <a href="'+esc(mapsUrl(r))+'">mapa</a>':'')+'</dd></div>':'')+
+        (r.phone?'<div><dt>Teléfono</dt><dd>'+esc(r.phone)+'</dd></div>':'')+
+        (r.email?'<div><dt>Email</dt><dd>'+esc(r.email)+'</dd></div>':'')+
+        (r.website?'<div><dt>Web</dt><dd><a href="'+esc(r.website)+'">'+esc(r.website)+'</a></dd></div>':'')+
+        (ci && ci.uri?'<div><dt>Clase (ontología)</dt><dd class="mono">'+esc(ci.uri)+'</dd></div>':'')+
+        (r.sourceUri?'<div><dt>Origen</dt><dd class="mono"><a href="'+esc(r.sourceUri)+'">'+esc(r.sourceUri)+'</a></dd></div>':'')+
+      '</dl>'+
+      (translationsBlock?'<div class="translations">'+translationsBlock+'</div>':'')+
+      (socialLinks?'<div class="tags" style="margin-bottom:6px">'+socialLinks+'</div>':'')+
+      (tags.length?'<div class="tags">'+tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>':'')+
+    '</article>';
+  }
   function toHtmlSnapshot(records){
     var byPool = {};
     POOLS.forEach(function(p){ byPool[p.id] = records.filter(function(r){return r.pool===p.id;}); });
     var genAt = new Date().toLocaleString("es-ES");
+    /* Filtro por categoría/clase (14/09/2026, a petición de Federico: "que se pueda filtrar por
+       categoría o clase") — se calcula sobre TODO el catálogo exportado (las dos secciones a la
+       vez), porque una misma categoría no se repite entre Organizaciones turísticas y Otros
+       recursos. Se ordena por número de fichas (de más a menos) para que las categorías con más
+       contenido queden primero, que es lo que probablemente se quiera filtrar antes. */
+    var classCounts = {}; var classOrder = [];
+    records.forEach(function(r){
+      var ci = classInfo(r.pool, r.classCode);
+      var label = (ci ? ci.label : r.classLabel) || "Sin categoría";
+      if(classCounts[label]===undefined){ classCounts[label]=0; classOrder.push(label); }
+      classCounts[label]++;
+    });
+    classOrder.sort(function(a,b){ return classCounts[b]-classCounts[a] || a.localeCompare(b,"es"); });
+    var filterBarHtml = '<div class="filter-bar" id="csFilterBar">'+
+      '<button type="button" class="filter-chip active" data-filterclass="">Todas <span class="n">'+records.length+'</span></button>'+
+      classOrder.map(function(label){
+        return '<button type="button" class="filter-chip" data-filterclass="'+esc(label)+'">'+esc(label)+' <span class="n">'+classCounts[label]+'</span></button>';
+      }).join("")+
+      '</div>';
     function section(pool){
       var recs = byPool[pool];
       if(!recs.length) return "";
       var chipClass = pool==="organizacion"?"gold":(pool==="religioso"?"teal":"neutral");
       var rows = recs.map(function(r){
         var ci = classInfo(r.pool, r.classCode);
-        var tags = (r.attributes||[]).map(attrLabel);
-        var addr = formatAddress(r);
-        var translationsBlock = LANGS.map(function(l){
-          var t = (r.translations && r.translations[l.code]) || {};
-          if(!t.name && !t.description) return "";
-          return '<div class="translation"><span class="lang-tag">'+esc(l.code.toUpperCase())+'</span> '+
-            (t.name?'<b>'+esc(t.name)+'</b>':'')+(t.description?' — '+esc(t.description):'')+'</div>';
-        }).join("");
-        var socialLinks = (r.socialMedia||[]).filter(function(s){return s.platform||s.handle;})
-          .map(function(s){ return '<span class="tag">'+esc(s.platform||"")+(s.handle?': '+esc(s.handle):'')+'</span>'; }).join("");
-        return '<article class="card">'+
-          (r.mainImage?'<img class="card-img" src="'+esc(r.mainImage)+'" alt="" loading="lazy">':'')+
-          '<header><h3>'+esc(r.name||"(sin nombre)")+'</h3><span class="chip '+chipClass+'">'+esc(ci?ci.label:(r.classLabel||""))+'</span></header>'+
-          (r.description?'<p class="desc">'+esc(r.description)+'</p>':'')+
-          '<dl>'+
-            (addr?'<div><dt>Dirección</dt><dd>'+esc(addr)+(hasCoords(r)?' · <a href="'+esc(mapsUrl(r))+'">mapa</a>':'')+'</dd></div>':'')+
-            (r.phone?'<div><dt>Teléfono</dt><dd>'+esc(r.phone)+'</dd></div>':'')+
-            (r.email?'<div><dt>Email</dt><dd>'+esc(r.email)+'</dd></div>':'')+
-            (r.website?'<div><dt>Web</dt><dd><a href="'+esc(r.website)+'">'+esc(r.website)+'</a></dd></div>':'')+
-            (ci && ci.uri?'<div><dt>Clase (ontología)</dt><dd class="mono">'+esc(ci.uri)+'</dd></div>':'')+
-            (r.sourceUri?'<div><dt>Origen</dt><dd class="mono"><a href="'+esc(r.sourceUri)+'">'+esc(r.sourceUri)+'</a></dd></div>':'')+
-          '</dl>'+
-          (translationsBlock?'<div class="translations">'+translationsBlock+'</div>':'')+
-          (socialLinks?'<div class="tags" style="margin-bottom:6px">'+socialLinks+'</div>':'')+
-          (tags.length?'<div class="tags">'+tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>':'')+
-        '</article>';
+        var label = (ci ? ci.label : r.classLabel) || "Sin categoría";
+        return recordCardHtml(r, chipClass, label);
       }).join("");
-      return '<section><h2>'+esc(poolLabel(pool))+' <span class="count">'+recs.length+'</span></h2><div class="cards">'+rows+'</div></section>';
+      return '<section data-poolsection="'+esc(pool)+'"><h2>'+esc(poolLabel(pool))+' <span class="count">'+recs.length+'</span></h2><div class="cards">'+rows+'</div></section>';
     }
+    /* Filtrado + lupa de imagen (lightbox) en JavaScript plano, sin dependencias — el documento
+       exportado tiene que seguir siendo un archivo suelto, autónomo, que se pueda abrir con
+       doble clic sin conexión a nada. */
+    var interactionScript = '<script>(function(){'+
+      'var bar=document.getElementById("csFilterBar");'+
+      'if(bar){bar.addEventListener("click",function(e){'+
+        'var btn=e.target.closest(".filter-chip"); if(!btn) return;'+
+        'bar.querySelectorAll(".filter-chip").forEach(function(b){b.classList.toggle("active",b===btn);});'+
+        'var wanted=btn.getAttribute("data-filterclass");'+
+        'document.querySelectorAll(".card").forEach(function(card){'+
+          'var show=!wanted || card.getAttribute("data-cardclass")===wanted;'+
+          'card.style.display=show?"":"none";'+
+        '});'+
+        'document.querySelectorAll("section[data-poolsection]").forEach(function(sec){'+
+          'var anyVisible=Array.prototype.some.call(sec.querySelectorAll(".card"),function(c){return c.style.display!=="none";});'+
+          'sec.style.display=anyVisible?"":"none";'+
+        '});'+
+      '});}'+
+      'document.addEventListener("click",function(e){'+
+        'var img=e.target.closest(".card-img"); if(!img) return;'+
+        'var box=document.createElement("div"); box.className="lightbox";'+
+        'var big=document.createElement("img"); big.src=img.src; box.appendChild(big);'+
+        'box.addEventListener("click",function(){box.remove();});'+
+        'document.body.appendChild(box);'+
+      '});'+
+    '})();</'+'script>';
     return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+
       '<title>Catálogo Turístico de Sevilla</title>'+
       '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">'+
-      '<style>'+
-      ':root{--ink:#171510;--ink-soft:#5b5548;--ink-faint:#948d7c;--ground:#f6f4ee;--surface:#fff;--surface-alt:#eeeadd;--line:#ddd6c2;--gold:#b98a1f;--gold-ink:#7c5b12;--gold-soft:#f6ecd2;--teal:#0f6f6a;--teal-ink:#0b4f4c;--teal-soft:#dff0ee;}'+
-      '@media(prefers-color-scheme:dark){:root{--ink:#f3efe2;--ink-soft:#c3bca8;--ink-faint:#8f8874;--ground:#0e0d0a;--surface:#18160f;--surface-alt:#211e14;--line:#332f22;--gold:#e0b23f;--gold-ink:#f3cf74;--gold-soft:#2c2312;--teal:#4fc0ba;--teal-ink:#8fdcd7;--teal-soft:#12302e;}}'+
-      '*{box-sizing:border-box}body{margin:0;background:var(--ground);color:var(--ink);font-family:"Public Sans",sans-serif;font-size:14px;line-height:1.55;padding:36px 20px 80px}'+
-      '.wrap{max-width:960px;margin:0 auto}'+
-      'h1{font-family:"Manrope",sans-serif;font-weight:800;font-size:26px;margin:0 0 4px}'+
-      '.sub{color:var(--ink-faint);font-size:13px;margin:0 0 34px}'+
-      'h2{font-family:"Manrope",sans-serif;font-size:17px;margin:0 0 14px;display:flex;align-items:center;gap:8px}'+
-      '.count{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-faint);font-weight:500}'+
-      'section{margin-bottom:36px}'+
-      '.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}'+
-      '.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;overflow:hidden}'+
-      '.card-img{width:calc(100% + 32px);margin:-16px -16px 12px;display:block;height:150px;object-fit:cover;background:var(--surface-alt)}'+
-      '.card header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}'+
-      '.card h3{font-family:"Manrope",sans-serif;font-size:14.5px;margin:0}'+
-      '.desc{font-size:12.8px;color:var(--ink-soft);margin:0 0 10px}'+
-      '.chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap}'+
-      '.chip.gold{background:var(--gold-soft);color:var(--gold-ink)}.chip.teal{background:var(--teal-soft);color:var(--teal-ink)}.chip.neutral{background:var(--surface-alt);color:var(--ink-soft);border:1px solid var(--line)}'+
-      'dl{margin:0 0 10px;font-size:12.3px}dl div{display:flex;gap:6px;padding:2px 0}dt{color:var(--ink-faint);min-width:110px;flex:none}dd{margin:0;word-break:break-word}'+
-      '.mono{font-family:"IBM Plex Mono",monospace;font-size:11px}'+
-      '.tags{display:flex;flex-wrap:wrap;gap:5px}.tag{font-size:10.8px;background:var(--surface-alt);border:1px solid var(--line);color:var(--ink-soft);padding:2px 8px;border-radius:99px}'+
-      '.translations{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;padding:8px 10px;background:var(--teal-soft);border-radius:8px}'+
-      '.translation{font-size:11.5px;color:var(--teal-ink)}.lang-tag{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:700;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 4px;margin-right:4px}'+
-      '</style></head><body><div class="wrap">'+
+      '<style>body{margin:0;background:#f6f4ee}@media(prefers-color-scheme:dark){body{background:#0e0d0a}}.wrap{max-width:1080px;margin:0 auto;padding:36px 20px 80px}'+catalogCardCss()+'</style>'+
+      '</head><body><div class="wrap catalog-scope">'+
       '<h1>Catálogo Turístico de Sevilla</h1><p class="sub">Documento generado en modo solo lectura el '+esc(genAt)+' · '+records.length+' fichas · clasificado según la ontología SEGITTUR</p>'+
+      filterBarHtml+
       section("organizacion")+section("otro")+
-      '</div></body></html>';
+      '</div>'+interactionScript+'</body></html>';
   }
   /* ---------- Exportación al formato de importación de la PID/SEGITTUR ---------- */
   var PID_HEADERS = [
