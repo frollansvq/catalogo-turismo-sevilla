@@ -1813,7 +1813,7 @@
       comunidadAutonoma:PID_LOCATION_DEFAULTS.comunidadAutonoma, provincia:PID_LOCATION_DEFAULTS.provincia,
       pais:PID_LOCATION_DEFAULTS.pais, municipio:PID_LOCATION_DEFAULTS.municipio, localidad:PID_LOCATION_DEFAULTS.localidad,
       comarca:PID_LOCATION_DEFAULTS.comarca, destinoTuristico:"Sevilla", keywords:[],
-      phone:"", email:"", website:"", app:"", mensajeria:"", mainImage:"", carpetaMultimedia:"", socialMedia:[], sourceUri:"",
+      phone:"", email:"", website:"", app:"", mensajeria:"", mainImage:"", additionalImages:[], carpetaMultimedia:"", socialMedia:[], sourceUri:"",
       fuenteDato:"", fechaVerificacion:"", estado:"", observacionesGobernanza:"",
       horario:blankHorario(),
       observaciones:"", curiosidades:"", condiciones:"", consejoAcceder:"", faqs:[],
@@ -1847,6 +1847,10 @@
     if(draft.lat===undefined) draft.lat = "";
     if(draft.lng===undefined) draft.lng = "";
     if(draft.mainImage===undefined) draft.mainImage = "";
+    /* 20/09/2026, a petición de Federico ("me gustaría poder subir mas de una imagen"): hasta 5
+       imágenes adicionales, además de la principal — mismo tope que las 5 columnas "imagen
+       secundaria 1..5" que ya trae la plantilla de importación de la PID (ver pidValuesForRecord). */
+    if(!Array.isArray(draft.additionalImages)) draft.additionalImages = [];
     if(draft.carpetaMultimedia===undefined) draft.carpetaMultimedia = "";
     if(!Array.isArray(draft.socialMedia)) draft.socialMedia = [];
     if(draft.sourceUri===undefined) draft.sourceUri = "";
@@ -2088,8 +2092,20 @@
         '<button type="button" class="icon-btn danger" data-action="removesocial" data-idx="'+i+'" title="Quitar">×</button></div>'+
       '</div>';
     }).join("");
+    /* 20/09/2026, a petición de Federico: además de la imagen principal, hasta 5 imágenes más por
+       ficha (tope alineado con las 5 columnas "imagen secundaria" que ya trae la plantilla de
+       importación de la PID — ver pidValuesForRecord). Mismo patrón de filas repetibles que "Redes
+       sociales" justo debajo. */
+    var imgRowsHtml = (draft.additionalImages||[]).map(function(u, i){
+      return '<div data-img-row="'+i+'" style="display:flex;gap:6px;margin-bottom:6px">'+
+        '<input type="url" data-img="url" data-idx="'+i+'" value="'+esc(u)+'" placeholder="https://…" style="flex:1">'+
+        '<button type="button" class="icon-btn danger" data-action="removeimg" data-idx="'+i+'" title="Quitar">×</button>'+
+      '</div>';
+    }).join("");
     var linksHtml = '<div class="attr-form-group" style="border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px">'+
       '<div class="field"><label>Imagen principal (URL)</label><input type="url" id="f_mainimage" value="'+esc(draft.mainImage)+'" placeholder="https://…"></div>'+
+      '<div class="field" style="margin-top:10px"><label>Imágenes adicionales <span class="hint">(hasta 5 más)</span></label><div id="imgRowsWrap">'+imgRowsHtml+'</div>'+
+      '<button type="button" class="btn btn-sm" id="addImgBtn" style="margin-top:4px" '+((draft.additionalImages||[]).length>=5?"disabled":"")+'>+ Añadir imagen</button></div>'+
       '<div class="field" style="margin-top:10px"><label>Carpeta de multimedia (Drive)</label><input type="url" id="f_carpetamultimedia" value="'+esc(draft.carpetaMultimedia)+'" placeholder="https://drive.google.com/drive/folders/…">'+
       '<span class="hint">Crea en Drive una carpeta con las fotos, vídeos o modelos 3D de este recurso, compártela como "Cualquier persona con el enlace puede ver" y pega aquí la URL de la carpeta (no de un archivo suelto).</span></div>'+
       '<div class="field" style="margin-top:10px"><label>Redes sociales</label><div id="socialRowsWrap">'+socialRowsHtml+'</div>'+
@@ -2550,6 +2566,17 @@
       draft.socialMedia.push({platform:"", handle:""});
       renderPanel();
     });
+    document.getElementById("addImgBtn").addEventListener("click", function(){
+      syncFormFieldsToDraft();
+      if((draft.additionalImages||[]).length < 5){ draft.additionalImages.push(""); renderPanel(); }
+    });
+    panel.querySelectorAll('[data-action="removeimg"]').forEach(function(btn){
+      btn.addEventListener("click", function(){
+        syncFormFieldsToDraft();
+        draft.additionalImages.splice(parseInt(btn.getAttribute("data-idx"),10), 1);
+        renderPanel();
+      });
+    });
     panel.querySelectorAll('[data-action="removesocial"]').forEach(function(btn){
       btn.addEventListener("click", function(){
         syncFormFieldsToDraft();
@@ -2729,6 +2756,7 @@
       syncFormFieldsToDraft();
       if(!draft.name){ alert("Indica al menos un nombre para la ficha."); return; }
       draft.socialMedia = (draft.socialMedia||[]).filter(function(s){ return s.platform || s.handle; });
+      draft.additionalImages = (draft.additionalImages||[]).filter(function(u){ return u; });
       draft.faqs = (draft.faqs||[]).filter(function(f){ return f.pregunta || f.respuesta; });
       draft.reconocimientos = (draft.reconocimientos||[]).filter(function(rc){ return rc.reconocimiento || rc.reconocidoPor; });
       draft.entradasReligiosas = (draft.entradasReligiosas||[]).filter(function(en){ return en.categoriaCode || en.tradicion || en.epoca || en.nota; });
@@ -2805,6 +2833,13 @@
     draft.app = document.getElementById("f_app").value.trim();
     draft.mensajeria = document.getElementById("f_mensajeria").value.trim();
     draft.mainImage = document.getElementById("f_mainimage").value.trim();
+    /* Igual que socialMedia/faqs/reconocimientos: aquí se guardan las filas tal cual están, aunque
+       alguna esté vacía todavía (si no, una fila recién añadida con "+ Añadir imagen" desaparecería
+       sola en el siguiente syncFormFieldsToDraft, antes de que el usuario llegue a escribir la URL).
+       Las filas realmente vacías se limpian solo al guardar de verdad, en panelSaveBtn. */
+    var newImgs = [];
+    panel.querySelectorAll('[data-img="url"]').forEach(function(el){ newImgs.push(el.value.trim()); });
+    draft.additionalImages = newImgs;
     draft.carpetaMultimedia = document.getElementById("f_carpetamultimedia").value.trim();
     var newSocial = [];
     panel.querySelectorAll('[data-social="platform"]').forEach(function(el){
@@ -2951,21 +2986,33 @@
      genera «Exportar → HTML — catálogo (solo lectura)» (ver recordCardHtml/catalogCardCss más
      abajo), para que lo que se ve aquí sea fielmente lo que saldría en ese archivo. Se abre desde
      el propio panel de edición, después de un syncFormFieldsToDraft() — así refleja también los
-     cambios que aún no se han guardado, para poder revisarlos antes de decidir guardar. */
+     cambios que aún no se han guardado, para poder revisarlos antes de decidir guardar.
+     AMPLIADA 20/09/2026, a petición de Federico ("me gustaría entrar y ampliar toda la información
+     y visualizar turismo religioso"): ya no muestra solo la tarjeta resumida del catálogo público,
+     sino esa misma tarjeta + todos los bloques adicionales (turismo religioso, MICE, horario,
+     campos extra de la PID) que la tarjeta pública no lleva por estar pensada para el visitante, no
+     para el equipo — ver recordFullDetailHtml más abajo, junto a recordCardHtml. */
   function openRecordPreview(record){
     var root = document.getElementById("previewModalRoot");
-    var chipClass = record.pool==="organizacion" ? "gold" : "neutral";
-    var ci = classInfo(record.pool, record.classCode);
-    var label = (ci ? ci.label : record.className) || "Sin categoría";
-    root.innerHTML = '<div class="config-modal" id="previewModalBackdrop"><div class="config-card" style="max-width:440px">'+
+    root.innerHTML = '<div class="config-modal" id="previewModalBackdrop"><div class="config-card">'+
       '<div class="config-head"><h2 style="margin:0;font-size:16px">Vista previa — cómo se publica</h2>'+
       '<button class="icon-btn" id="previewCloseBtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'+
       '<div class="config-body"><style>'+catalogCardCss()+'</style>'+
-      '<div class="catalog-scope"><div class="cards" style="grid-template-columns:1fr">'+recordCardHtml(record, chipClass, label)+'</div></div>'+
-      '<p class="hint" style="margin-top:12px">Así se vería en «Exportar → HTML — catálogo (solo lectura)». Si tienes cambios sin guardar en el formulario, ya están reflejados aquí.</p>'+
+      '<div class="catalog-scope"><div class="cards" style="grid-template-columns:1fr">'+recordFullDetailHtml(record)+'</div></div>'+
+      '<p class="hint" style="margin-top:12px">La tarjeta de arriba (imagen, nombre, dirección, descripción…) es tal cual sale en «Exportar → HTML — catálogo (solo lectura)». Los bloques de debajo (turismo religioso, MICE, horario, campos adicionales…) son solo para el equipo, no se publican así en ningún sitio todavía. Si tienes cambios sin guardar en el formulario, ya están reflejados aquí.</p>'+
       '</div></div></div>';
     document.getElementById("previewModalBackdrop").addEventListener("click", function(e){ if(e.target===e.currentTarget) closeRecordPreview(); });
     document.getElementById("previewCloseBtn").addEventListener("click", closeRecordPreview);
+    // Lupa de imagen también aquí dentro (el modal vive en la app, no en el HTML exportado, así que
+    // no puede reutilizar el <script> de toHtmlSnapshot — se une el mismo comportamiento a mano).
+    root.querySelectorAll(".card-img, .card-img-thumb").forEach(function(img){
+      img.addEventListener("click", function(){
+        var box = document.createElement("div"); box.className = "lightbox";
+        var big = document.createElement("img"); big.src = img.src; box.appendChild(big);
+        box.addEventListener("click", function(){ box.remove(); });
+        (img.closest(".catalog-scope")||root).appendChild(box);
+      });
+    });
   }
   function closeRecordPreview(){ document.getElementById("previewModalRoot").innerHTML = ""; }
   function usageCount(pool, code){ return state.records.filter(function(r){return r.pool===pool && r.classCode===code;}).length; }
@@ -3714,7 +3761,7 @@
     var header = ["Ámbito","¿Es una empresa?","Categoría (código)","Categoría (etiqueta)","URI ontología","Nombre","Descripción corta","Descripción larga",
       "Palabras clave","Destino turístico asociado","Calle","Número","Código postal","Comarca","Latitud","Longitud","Geometría (WKT)",
       "Teléfono","Email","Web","App","Mensajería instantánea","Etiquetas","Notas",
-      "Imagen principal","Carpeta de multimedia (Drive)","Redes sociales","Fuente (URI de origen)",
+      "Imagen principal","Imágenes adicionales","Carpeta de multimedia (Drive)","Redes sociales","Fuente (URI de origen)",
       "Observaciones (público)","Curiosidades","Condiciones","Consejo para acceder","Preguntas frecuentes",
       "Método de pago","Unidad de viaje","Reconocimientos","Acceso público","Aforo",
       "Servicio adicional (recurso turístico)","Servicio adicional (histórico o cultural)","Tipo de turista",
@@ -3776,7 +3823,7 @@
         (r.keywords||[]).join(" | "), r.destinoTuristico||"",
         r.street||"", r.number||"", r.postalCode||"", r.comarca||"", r.lat||"", r.lng||"", r.geometriaWkt||"",
         r.phone||"", r.email||"", r.website||"", r.app||"", r.mensajeria||"", tags, r.notes||"",
-        r.mainImage||"", r.carpetaMultimedia||"", social, r.sourceUri||"",
+        r.mainImage||"", (r.additionalImages||[]).join(" | "), r.carpetaMultimedia||"", social, r.sourceUri||"",
         r.observaciones||"", r.curiosidades||"", r.condiciones||"", r.consejoAcceder||"", faqsText,
         (r.metodoPago||[]).join(" | "), (r.unidadViaje||[]).join(" | "), reconocimientosText,
         r.accesoPublico||"", r.aforo||"",
@@ -3829,6 +3876,11 @@
       '.catalog-scope .card{background:var(--cs-surface);border:1px solid var(--cs-line);border-radius:14px;padding:16px;overflow:hidden;transition:box-shadow .15s,transform .15s}'+
       '.catalog-scope .cards .card:hover{box-shadow:0 10px 26px -12px rgba(23,21,16,.28);transform:translateY(-2px)}'+
       '.catalog-scope .card-img{width:calc(100% + 32px);margin:-16px -16px 12px;display:block;height:180px;object-fit:cover;background:var(--cs-surface-alt);cursor:zoom-in}'+
+      /* 20/09/2026, a petición de Federico ("me gustaría poder subir mas de una imagen"): tira de
+         miniaturas para las imágenes adicionales, debajo de la principal — mismo comportamiento de
+         "lupa" al hacer clic (ver interactionScript y openRecordPreview). */
+      '.catalog-scope .gallery-strip{display:flex;gap:6px;margin:0 0 12px;overflow-x:auto}'+
+      '.catalog-scope .card-img-thumb{width:56px;height:56px;flex:none;border-radius:8px;object-fit:cover;cursor:zoom-in;border:1px solid var(--cs-line);background:var(--cs-surface-alt)}'+
       '.catalog-scope .card header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}'+
       '.catalog-scope .card h3{font-family:"Manrope",sans-serif;font-size:14.5px;margin:0}'+
       '.catalog-scope .desc{font-size:12.8px;color:var(--cs-ink-soft);margin:0 0 10px}'+
@@ -3840,7 +3892,13 @@
       '.catalog-scope .translations{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;padding:8px 10px;background:var(--cs-teal-soft);border-radius:8px}'+
       '.catalog-scope .translation{font-size:11.5px;color:var(--cs-teal-ink)}.catalog-scope .lang-tag{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:700;background:var(--cs-surface);border:1px solid var(--cs-line);border-radius:4px;padding:1px 4px;margin-right:4px}'+
       '.catalog-scope .lightbox{position:fixed;inset:0;background:rgba(10,9,6,.86);display:flex;align-items:center;justify-content:center;padding:26px;z-index:999;cursor:zoom-out}'+
-      '.catalog-scope .lightbox img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)}';
+      '.catalog-scope .lightbox img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)}'+
+      /* 20/09/2026, a petición de Federico ("me gustaría entrar y ampliar toda la información y
+         visualizar turismo religioso"): bloques de la vista previa ampliada (recordFullDetailHtml),
+         que no aparecen en la tarjeta resumida del catálogo público. */
+      '.catalog-scope .detail-section{margin-top:16px;padding-top:14px;border-top:1px solid var(--cs-line)}'+
+      '.catalog-scope .detail-section h4{font-family:"Manrope",sans-serif;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--cs-ink-faint);margin:0 0 8px}'+
+      '.catalog-scope .detail-list{margin:0 0 8px;padding-left:18px;font-size:12.8px}.catalog-scope .detail-list li{margin-bottom:4px}';
   }
   function recordCardHtml(r, chipClass, cardClassLabel){
     var ci = classInfo(r.pool, r.classCode);
@@ -3854,8 +3912,20 @@
     }).join("");
     var socialLinks = (r.socialMedia||[]).filter(function(s){return s.platform||s.handle;})
       .map(function(s){ return '<span class="tag">'+esc(s.platform||"")+(s.handle?': '+esc(s.handle):'')+'</span>'; }).join("");
+    /* 20/09/2026, a petición de Federico ("me gustaría poder subir mas de una imagen"): tira de
+       miniaturas para el resto de imágenes, debajo de la principal — ver gallery-strip en
+       catalogCardCss() y el manejador de clic en interactionScript/openRecordPreview. */
+    /* filter(Boolean): defensivo — la ficha en edición (draft) puede tener filas de imagen todavía
+       vacías mientras el usuario las rellena (ver syncFormFieldsToDraft), y esta misma función es la
+       que pinta la vista previa en vivo desde el propio draft sin guardar. */
+    var extraImgs = (r.additionalImages||[]).filter(Boolean);
+    var galleryHtml = extraImgs.length ?
+      '<div class="gallery-strip">'+extraImgs.map(function(u){
+        return '<img class="card-img-thumb" src="'+esc(u)+'" alt="" loading="lazy">';
+      }).join("")+'</div>' : "";
     return '<article class="card" data-cardclass="'+esc(cardClassLabel||"")+'">'+
       (r.mainImage?'<img class="card-img" src="'+esc(r.mainImage)+'" alt="" loading="lazy">':'')+
+      galleryHtml+
       '<header><h3>'+esc(r.name||"(sin nombre)")+'</h3><span class="chip '+chipClass+'">'+esc(ci?ci.label:(r.classLabel||""))+'</span></header>'+
       (r.description?'<p class="desc">'+esc(r.description)+'</p>':'')+
       '<dl>'+
@@ -3870,6 +3940,128 @@
       (socialLinks?'<div class="tags" style="margin-bottom:6px">'+socialLinks+'</div>':'')+
       (tags.length?'<div class="tags">'+tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>':'')+
     '</article>';
+  }
+  /* Bloques adicionales de la vista previa ampliada del icono de ojo (20/09/2026, a petición de
+     Federico: "me gustaría entrar y ampliar toda la información y visualizar turismo religioso").
+     Ninguno de estos aparece en recordCardHtml/toHtmlSnapshot (la tarjeta pública del catálogo
+     exportado) — son solo para que el equipo, dentro de la herramienta, pueda revisar de un vistazo
+     todo lo que tiene rellenado una ficha antes de decidir si publicarla o seguir editándola. Cada
+     función devuelve "" si no hay nada que mostrar, así que una ficha sencilla (sin nada religioso,
+     sin MICE, sin horario) no deja huecos vacíos en la vista previa. */
+  function codeLabel_(list, code){
+    var f = list.filter(function(x){ return x.code===code; })[0];
+    return f ? f.label : code;
+  }
+  function religiousBlockHtml_(r){
+    if(!r.esReligioso) return "";
+    var entradas = (r.entradasReligiosas||[]).filter(function(en){ return en.categoriaCode||en.tradicion||en.epoca||en.nota; });
+    var entradasHtml = entradas.length ? '<ul class="detail-list">'+entradas.map(function(en){
+      var catInfo = state.religiousCategories.filter(function(c){ return c.code===en.categoriaCode; })[0];
+      var catLabel = catInfo ? catInfo.label : (en.categoriaCode||"");
+      var tradLabel = en.tradicion ? attrLabel(en.tradicion) : "";
+      var base = [catLabel, tradLabel].filter(Boolean).join(" / ") || "(sin categoría ni tradición)";
+      return '<li>'+esc(base)+(en.epoca?' — '+esc(en.epoca):'')+(en.nota?' ('+esc(en.nota)+')':'')+'</li>';
+    }).join("")+'</ul>' : "";
+    var estadoBits = [
+      r.usoActualReligioso ? "Uso actual: "+codeLabel_(RELIGIOUS_CURRENT_USE, r.usoActualReligioso) : "",
+      r.estatusPatrimonialReligioso ? "Estatus patrimonial: "+codeLabel_(RELIGIOUS_HERITAGE_STATUS, r.estatusPatrimonialReligioso) : "",
+      r.estadoConservacion ? "Conservación: "+codeLabel_(RELIGIOUS_CONSERVATION_STATUS, r.estadoConservacion) : ""
+    ].filter(Boolean);
+    var identidadBits = [
+      r.tipoTrel ? "Tipo: "+r.tipoTrel : "",
+      r.advocacion ? "Advocación: "+r.advocacion : "",
+      r.ordenHermandad ? "Orden/hermandad: "+r.ordenHermandad : "",
+      r.festividad ? "Festividad: "+r.festividad : ""
+    ].filter(Boolean);
+    var religiousTags = (r.attributes||[]).filter(function(k){
+      return state.attributeGroups.some(function(g){
+        return ["gastronomia_religiosa","hospederia_religiosa","artesania_sacra"].indexOf(g.key)!==-1 &&
+          g.items.some(function(it){ return it.key===k; });
+      });
+    }).map(attrLabel);
+    var extraBits = [
+      r.certificacionEntidad ? "Organismo certificador: "+r.certificacionEntidad : "",
+      r.conventoBase ? "Convento/monasterio base: "+r.conventoBase : "",
+      r.ambito ? "Ámbito: "+r.ambito : "",
+      r.rangoPrecios ? "Rango de precios: "+r.rangoPrecios : ""
+    ].filter(Boolean);
+    if(!entradasHtml && !estadoBits.length && !identidadBits.length && !religiousTags.length && !extraBits.length) return "";
+    return '<div class="detail-section"><h4>Turismo religioso</h4>'+
+      entradasHtml+
+      (estadoBits.length?'<p class="desc">'+estadoBits.map(esc).join(" · ")+'</p>':'')+
+      (identidadBits.length?'<p class="desc">'+identidadBits.map(esc).join(" · ")+'</p>':'')+
+      (religiousTags.length?'<div class="tags">'+religiousTags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>':'')+
+      (extraBits.length?'<p class="desc">'+extraBits.map(esc).join(" · ")+'</p>':'')+
+    '</div>';
+  }
+  function miceBlockHtml_(r){
+    if(!r.esMice) return "";
+    var bits = [
+      r.tipoProveedorMice ? "Tipo de proveedor: "+r.tipoProveedorMice : "",
+      r.disponeAlojamientoPropio ? "Dispone de alojamiento propio" : "",
+      r.numHabitaciones ? "Nº habitaciones: "+r.numHabitaciones : "",
+      r.miembroConventionBureau ? "Miembro del Sevilla Convention Bureau" : "",
+      r.tipoSedeMice ? "Tipo de sede: "+r.tipoSedeMice : ""
+    ].filter(Boolean);
+    var salas = (r.salasEventosMice||[]).filter(function(s){ return s.nombre; });
+    var salasHtml = salas.length ? '<ul class="detail-list">'+salas.map(function(s){
+      return '<li>'+esc(s.nombre)+' — teatro: '+esc(s.teatro||"–")+', escuela: '+esc(s.escuela||"–")+', U: '+esc(s.formaU||"–")+
+        ', banquete: '+esc(s.banquete||"–")+', cóctel: '+esc(s.coctel||"–")+', expo: '+esc(s.exposicion||"–")+'</li>';
+    }).join("")+'</ul>' : "";
+    if(!bits.length && !salasHtml) return "";
+    return '<div class="detail-section"><h4>MICE (turismo de negocio)</h4>'+
+      (bits.length?'<p class="desc">'+bits.map(esc).join(" · ")+'</p>':'')+
+      salasHtml+
+    '</div>';
+  }
+  function horarioBlockHtml_(r){
+    var h = r.horario;
+    if(!h) return "";
+    if(h.abierto24h) return '<div class="detail-section"><h4>Horario</h4><p class="desc">Abierto 24 horas.</p></div>';
+    var lines = DIAS_SEMANA.map(function(d){
+      var day = h.dias && h.dias[d.key];
+      if(!day) return "";
+      var t1 = (day.turno1 && day.turno1.apertura && day.turno1.cierre) ? day.turno1.apertura+"–"+day.turno1.cierre : "";
+      var t2 = (day.turno2 && day.turno2.apertura && day.turno2.cierre) ? day.turno2.apertura+"–"+day.turno2.cierre : "";
+      var franjas = [t1, t2].filter(Boolean).join(", ");
+      return franjas ? '<li>'+esc(d.label)+": "+esc(franjas)+'</li>' : "";
+    }).filter(Boolean);
+    if(!lines.length && !h.cierreTemporal) return "";
+    return '<div class="detail-section"><h4>Horario</h4>'+
+      (lines.length?'<ul class="detail-list">'+lines.join("")+'</ul>':'<p class="desc">Sin horario detallado.</p>')+
+      (h.cierreTemporal?'<p class="desc">⚠ Cierre temporal activo.</p>':'')+
+    '</div>';
+  }
+  function extraPidBlockHtml_(r){
+    var bits = [];
+    if(r.descriptionLong) bits.push('<p class="desc"><b>Descripción larga:</b> '+esc(r.descriptionLong)+'</p>');
+    var kws = (r.keywords||[]).filter(Boolean);
+    if(kws.length) bits.push('<div class="tags">'+kws.map(function(k){return '<span class="tag">'+esc(k)+'</span>';}).join("")+'</div>');
+    if(r.observaciones) bits.push('<p class="desc"><b>Observaciones:</b> '+esc(r.observaciones)+'</p>');
+    if(r.curiosidades) bits.push('<p class="desc"><b>Curiosidades:</b> '+esc(r.curiosidades)+'</p>');
+    if(r.condiciones) bits.push('<p class="desc"><b>Condiciones:</b> '+esc(r.condiciones)+'</p>');
+    if(r.consejoAcceder) bits.push('<p class="desc"><b>Consejo para acceder:</b> '+esc(r.consejoAcceder)+'</p>');
+    var faqs = (r.faqs||[]).filter(function(f){ return f.pregunta||f.respuesta; });
+    if(faqs.length) bits.push('<ul class="detail-list">'+faqs.map(function(f){ return '<li><b>'+esc(f.pregunta||"")+'</b> — '+esc(f.respuesta||"")+'</li>'; }).join("")+'</ul>');
+    if(r.accesoPublico) bits.push('<p class="desc"><b>Acceso público:</b> '+esc(r.accesoPublico)+'</p>');
+    if(r.aforo) bits.push('<p class="desc"><b>Aforo:</b> '+esc(r.aforo)+'</p>');
+    if(r.servicioAdicionalTuristico) bits.push('<p class="desc"><b>Servicio adicional turístico:</b> '+esc(r.servicioAdicionalTuristico)+'</p>');
+    var reconoc = (r.reconocimientos||[]).filter(function(rc){ return rc.reconocimiento||rc.reconocidoPor; });
+    if(reconoc.length) bits.push('<div class="tags">'+reconoc.map(function(rc){ return '<span class="tag">'+esc(rc.reconocimiento||"")+(rc.reconocidoPor?' ('+esc(rc.reconocidoPor)+')':'')+'</span>'; }).join("")+'</div>');
+    var chips = [].concat(r.metodoPago||[], r.unidadViaje||[], r.tipoTurista||[], r.servicioAdicionalHistoricoCultural||[]);
+    if(chips.length) bits.push('<div class="tags">'+chips.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>');
+    if(!bits.length) return "";
+    return '<div class="detail-section"><h4>Información adicional</h4>'+bits.join("")+'</div>';
+  }
+  function recordFullDetailHtml(record){
+    var ci = classInfo(record.pool, record.classCode);
+    var chipClass = record.pool==="organizacion" ? "gold" : "neutral";
+    var label = (ci ? ci.label : record.className) || "Sin categoría";
+    return recordCardHtml(record, chipClass, label)+
+      religiousBlockHtml_(record)+
+      miceBlockHtml_(record)+
+      horarioBlockHtml_(record)+
+      extraPidBlockHtml_(record);
   }
   function toHtmlSnapshot(records){
     var byPool = {};
@@ -3924,11 +4116,15 @@
         '});'+
       '});}'+
       'document.addEventListener("click",function(e){'+
-        'var img=e.target.closest(".card-img"); if(!img) return;'+
+        'var img=e.target.closest(".card-img, .card-img-thumb"); if(!img) return;'+
         'var box=document.createElement("div"); box.className="lightbox";'+
         'var big=document.createElement("img"); big.src=img.src; box.appendChild(big);'+
         'box.addEventListener("click",function(){box.remove();});'+
-        'document.body.appendChild(box);'+
+        /* 20/09/2026: fix — antes se colgaba de document.body, que es HERMANO de .wrap.catalog-scope,
+           no descendiente, así que la regla CSS ".catalog-scope .lightbox" nunca llegaba a aplicarse
+           (la lupa aparecía sin estilo, como una imagen suelta al final de la página en vez de una
+           superposición). Se cuelga del propio contenedor .catalog-scope para que sí herede el CSS. */
+        '(img.closest(".catalog-scope")||document.body).appendChild(box);'+
       '});'+
     '})();</'+'script>';
     return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+
@@ -4131,7 +4327,12 @@
       pidLoc(r.comunidadAutonoma),
       "", "", "", "",
       r.mainImage || "",
-      "", "", "", "", "", "",
+      "",
+      (r.additionalImages && r.additionalImages[0]) || "",
+      (r.additionalImages && r.additionalImages[1]) || "",
+      (r.additionalImages && r.additionalImages[2]) || "",
+      (r.additionalImages && r.additionalImages[3]) || "",
+      (r.additionalImages && r.additionalImages[4]) || "",
       r.observaciones || notesParts.observaciones,
       r.curiosidades || notesParts.curiosidades,
       r.condiciones || notesParts.condiciones,
@@ -4174,7 +4375,7 @@
     "  - Column of specific type: la columna 'subclase' — SOLO si el Entity type elegido es una clase padre (p.ej. un recurso turístico genérico). Si el archivo es de una organización (Alojamiento, Restauración...), esa clase ya es la subclase final: no marques ninguna columna adicional.\r\n\r\n" +
     "IMPORTANTE — no toques las cabeceras de los CSV. La guía de la PID es explícita: cualquier cambio en los nombres de campo impide la importación.\r\n\r\n" +
     "Cosas que NO he podido automatizar, revísalas antes de subir:\r\n" +
-    "  1. Imagen principal: la PID exige un enlace a su propia Biblioteca de Medios (Drupal), no una URL externa. Sube cada imagen en Contenido -> Multimedia -> Biblioteca de Medios y sustituye la URL que aparece en la columna 'multimedia -> imagen principal' por el enlace que te genere allí.\r\n" +
+    "  1. Imagen principal e imágenes adicionales: la PID exige un enlace a su propia Biblioteca de Medios (Drupal), no una URL externa. Sube cada imagen en Contenido -> Multimedia -> Biblioteca de Medios y sustituye la URL que aparece en las columnas 'multimedia -> imagen principal' e 'imagen secundaria 1..5' por el enlace que te genere allí.\r\n" +
     "  2. Redes sociales: la columna 'plataforma de redes sociales' exige un valor Skos Concept (una URI del catálogo oficial de plataformas de la PID) que no tengo disponible — la he dejado vacía. Solo he rellenado el usuario/enlace; completa la plataforma a mano si aplica.\r\n" +
     "  3. Fichas de Recursos religiosos: no se han incluido. La PID no tiene todavía una subclase oficial de turismo religioso, así que no hay a qué clase mapearlas.\r\n" +
     "  4. Coordenadas (latitud/longitud): esta plantilla de la PID no tiene columnas para ellas, así que no se exportan aunque las tengas rellenas en el catálogo.\r\n" +
