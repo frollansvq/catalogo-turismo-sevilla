@@ -74,9 +74,9 @@
 
   .app{
     display:grid;
-    grid-template-columns:272px 1fr;
+    grid-template-columns:272px 1fr 240px;
     grid-template-rows:64px 1fr;
-    grid-template-areas:"topbar topbar" "sidebar main";
+    grid-template-areas:"topbar topbar topbar" "sidebar main sidebar-right";
     min-height:100vh;
   }
   .topbar{
@@ -136,6 +136,7 @@
   .menu .menu-hint{padding:6px 10px 2px;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);font-weight:700;}
 
   .sidebar{grid-area:sidebar;border-right:1px solid var(--line);background:var(--surface);padding:18px 14px 24px;overflow-y:auto;}
+  .sidebar-right{grid-area:sidebar-right;border-right:none;border-left:1px solid var(--line);}
   .side-section{margin-bottom:22px;}
   .side-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 8px 6px;}
   .pool-nav{display:flex;flex-direction:column;gap:2px;}
@@ -203,6 +204,13 @@
   .icon-btn.danger:hover{color:var(--bad);background:var(--bad-soft);}
 
   .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 20px;text-align:center;border:1px dashed var(--line);border-radius:12px;background:var(--surface);color:var(--ink-soft);}
+  /* Bug real encontrado 30/08/2026 (no tiene que ver con lo que pedía Federico esta vez, apareció
+     de casualidad al probar la barra nueva): el "display:flex" de arriba gana siempre al atributo
+     hidden de este mismo elemento — el navegador aplica [hidden]{display:none} con menos prioridad
+     que cualquier regla de la propia hoja de estilos, así que "Todavía no hay fichas" se quedaba
+     visible por encima o debajo de la tabla real en cuanto llegaban datos de la BBDD después del
+     primer render() vacío del arranque. Esta regla, al ser más específica, es la que de verdad gana. */
+  .empty-state[hidden]{display:none;}
   .empty-state h3{margin:14px 0 6px;font-size:16px;}
   .empty-state p{margin:0;max-width:380px;font-size:13px;color:var(--ink-faint);}
   .empty-actions{display:flex;gap:8px;margin-top:16px;}
@@ -288,6 +296,7 @@
   @media (max-width: 880px){
     .app{grid-template-columns:1fr;grid-template-areas:"topbar" "main";}
     .sidebar{display:none;}
+    .sidebar-right{display:none;}
     table{min-width:680px;}
   }
 </style>
@@ -388,6 +397,14 @@
     </div>
     <div class="empty-state" id="emptyState" hidden></div>
   </main>
+
+  <aside class="sidebar sidebar-right">
+    <div class="side-section">
+      <p class="side-label">Campos incompletos</p>
+      <p style="font-size:11.3px;color:var(--ink-faint);margin:-4px 6px 10px;line-height:1.4">Recuento de todo el catálogo, sin tener en cuenta los filtros de la izquierda. Haz clic para ver solo esas fichas.</p>
+      <div class="filter-list" id="qualityFilterList"></div>
+    </div>
+  </aside>
 </div>
 
 <div class="backdrop" id="backdrop"></div>
@@ -1248,7 +1265,7 @@
     religiousCategories: clone(DEFAULT_RELIGIOUS_CATEGORIES),
     attributeGroups: clone(DEFAULT_ATTRIBUTE_GROUPS)
   };
-  var ui = { pool:"all", search:"", classFilter:"", attrFilters:new Set(), estadoFilter:"", editingId:null };
+  var ui = { pool:"all", search:"", classFilter:"", attrFilters:new Set(), estadoFilter:"", missingFieldFilter:"", editingId:null };
   var dirty = false;
 
   function clone(x){ return JSON.parse(JSON.stringify(x)); }
@@ -1734,6 +1751,37 @@
     if(cfgStatus) cfgStatus.textContent = "Desconectado.";
   }
 
+  /* ---------- Campos incompletos (30/08/2026, a petición de Federico: "una barra a la derecha en
+     la que me indiques cuáles son los campos que no están rellenos de las fichas") ----------
+     Los 4 chequeos que pidió explícitamente. "Barrio" se comprueba contra el grupo de etiquetas
+     "Barrios turísticos de Sevilla" (busca el grupo por su código real en vez de asumir un texto
+     fijo, para que siga funcionando si algún día cambia de nombre desde «Configurar categorías y
+     etiquetas»; si por lo que sea no encuentra el grupo, cae en comprobar el prefijo "barrio_" de
+     las claves, que es como están construidas todas sus opciones). */
+  function barrioAttrKeys(){
+    var g = state.attributeGroups.filter(function(x){ return x.key === "barrios"; })[0];
+    if(g && g.items && g.items.length) return g.items.map(function(it){ return it.key; });
+    return null; // se resuelve con el prefijo "barrio_" en missingBarrio()
+  }
+  function missingBarrio(r){
+    var keys = barrioAttrKeys();
+    var attrs = r.attributes || [];
+    if(keys) return !attrs.some(function(a){ return keys.indexOf(a) !== -1; });
+    return !attrs.some(function(a){ return a.indexOf("barrio_") === 0; });
+  }
+  function missingEnTranslation(r){
+    var t = (r.translations && r.translations.en) || {};
+    return !t.name || !t.description;
+  }
+  function missingClass(r){ return !r.classCode; }
+  function missingAddress(r){ return !r.street; }
+  var MISSING_FIELD_CHECKS = [
+    {key:"nombreDescEn", label:"Nombre/descripción en inglés", test:missingEnTranslation},
+    {key:"categoria", label:"Categoría o clase seleccionada", test:missingClass},
+    {key:"direccion", label:"Dirección", test:missingAddress},
+    {key:"barrio", label:"Barrio sin seleccionar", test:missingBarrio}
+  ];
+
   /* ---------- Filtering ---------- */
   function filteredRecords(){
     return state.records.filter(function(r){
@@ -1742,6 +1790,10 @@
       if(ui.estadoFilter){
         if(ui.estadoFilter==="__sin_estado__"){ if(r.estado) return false; }
         else if(r.estado !== ui.estadoFilter) return false;
+      }
+      if(ui.missingFieldFilter){
+        var missingCheck = MISSING_FIELD_CHECKS.filter(function(c){ return c.key===ui.missingFieldFilter; })[0];
+        if(missingCheck && !missingCheck.test(r)) return false;
       }
       if(ui.attrFilters.size){
         var ok = true;
@@ -1805,6 +1857,21 @@
       ahtml += '</div></details>';
     });
     attrWrap.innerHTML = ahtml;
+    renderQualitySidebar();
+  }
+
+  /* Recuento SIEMPRE sobre todo el catálogo (state.records), igual que la lista de Gobernanza —
+     estado de al lado (no se recalcula según los filtros de la izquierda ya aplicados), para que
+     sirva como panel fijo de calidad de datos y no cambie de significado según qué estés mirando. */
+  function renderQualitySidebar(){
+    var wrap = document.getElementById("qualityFilterList");
+    if(!wrap) return;
+    var html = '<div class="filter-item '+(ui.missingFieldFilter===""?"active":"")+'" data-missing=""><span>Todas</span></div>';
+    MISSING_FIELD_CHECKS.forEach(function(c){
+      var n = state.records.filter(c.test).length;
+      html += '<div class="filter-item '+(ui.missingFieldFilter===c.key?"active":"")+'" data-missing="'+esc(c.key)+'"><span>'+esc(c.label)+'</span><span class="n">'+n+'</span></div>';
+    });
+    wrap.innerHTML = html;
   }
 
   /* ---------- Rendering: main ---------- */
@@ -4672,7 +4739,7 @@
     document.getElementById("configBtn").addEventListener("click", openConfig);
     document.getElementById("backdrop").addEventListener("click", closePanel);
     document.getElementById("clearFiltersBtn").addEventListener("click", function(){
-      ui.pool="all"; ui.classFilter=""; ui.attrFilters=new Set(); ui.estadoFilter=""; ui.search="";
+      ui.pool="all"; ui.classFilter=""; ui.attrFilters=new Set(); ui.estadoFilter=""; ui.missingFieldFilter=""; ui.search="";
       document.getElementById("searchInput").value="";
       render();
     });
@@ -4688,6 +4755,10 @@
     document.getElementById("estadoFilterList").addEventListener("click", function(e){
       var item = e.target.closest("[data-estado]"); if(!item) return;
       ui.estadoFilter = item.getAttribute("data-estado"); render();
+    });
+    document.getElementById("qualityFilterList").addEventListener("click", function(e){
+      var item = e.target.closest("[data-missing]"); if(!item) return;
+      ui.missingFieldFilter = item.getAttribute("data-missing"); render();
     });
     document.getElementById("attrFilterGroups").addEventListener("change", function(e){
       var cb = e.target.closest("[data-attrfilter]"); if(!cb) return;
