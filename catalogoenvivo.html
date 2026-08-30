@@ -171,6 +171,20 @@
   var recordsById = {};
 
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+  /* Un enlace de "Compartir" normal de Google Drive (drive.google.com/file/d/ID/view, o /open?id=ID) es
+     una página con visor, no la imagen en sí — rota siempre dentro de un <img src>. Se reescribe al
+     patrón de miniatura directa de Drive, que sí sirve el archivo. Solo funciona si el archivo está
+     compartido como "Cualquier persona con el enlace puede ver"; es un truco no oficial de Google que
+     podría dejar de funcionar si Google cambia este comportamiento. */
+  function normalizeImgUrl(u){
+    if(!u) return u;
+    var m = /drive\.google\.com\/file\/d\/([^/?]+)/.exec(u) ||
+      /drive\.google\.com\/open\?(?:[^#]*&)?id=([^&]+)/.exec(u) ||
+      /drive\.google\.com\/uc\?(?:[^#]*&)?id=([^&]+)/.exec(u) ||
+      /drive\.google\.com\/thumbnail\?(?:[^#]*&)?id=([^&]+)/.exec(u);
+    if(m && m[1]) return "https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1600";
+    return u;
+  }
   function poolLabel(id){ var p=POOLS.filter(function(x){return x.id===id;})[0]; return p?p.label:id; }
   function formatAddress(r){
     var line = [r.street, r.number].filter(Boolean).join(", ");
@@ -217,9 +231,9 @@
     }).join("");
     var extraImgs = (r.additionalImages||[]).filter(Boolean);
     var galleryHtml = extraImgs.length ?
-      '<div class="gallery-strip">'+extraImgs.map(function(u){ return '<img class="card-img-thumb" src="'+esc(u)+'" alt="" loading="lazy">'; }).join("")+'</div>' : "";
+      '<div class="gallery-strip">'+extraImgs.map(function(u){ return '<img class="card-img-thumb" src="'+esc(normalizeImgUrl(u))+'" alt="" loading="lazy">'; }).join("")+'</div>' : "";
     return '<article class="card" data-cardclass="'+esc(cardClassLabel||"")+'" data-recordid="'+esc(r.id)+'">'+
-      (r.mainImage?'<img class="card-img" src="'+esc(r.mainImage)+'" alt="" loading="lazy">':'')+
+      (r.mainImage?'<img class="card-img" src="'+esc(normalizeImgUrl(r.mainImage))+'" alt="" loading="lazy">':'')+
       galleryHtml+
       '<header><h3>'+esc(r.name||"(sin nombre)")+'</h3>'+
       '<div class="card-chips"><span class="chip '+chipClass+'">'+esc(ci?ci.label:(r.classLabel||""))+'</span>'+
@@ -338,7 +352,7 @@
     var label = (ci ? ci.label : r.className) || "Sin categoría";
     var addr = formatAddress(r);
     var extraImgs = (r.additionalImages||[]).filter(Boolean);
-    var galleryHtml = extraImgs.length ? '<div class="detail-gallery">'+extraImgs.map(function(u){ return '<img src="'+esc(u)+'" alt="" loading="lazy">'; }).join("")+'</div>' : "";
+    var galleryHtml = extraImgs.length ? '<div class="detail-gallery">'+extraImgs.map(function(u){ return '<img src="'+esc(normalizeImgUrl(u))+'" alt="" loading="lazy">'; }).join("")+'</div>' : "";
     var translationsBlock = LANGS.map(function(l){
       var t = (r.translations && r.translations[l.code]) || {};
       if(!t.name && !t.description) return "";
@@ -347,7 +361,7 @@
     var socialLinks = (r.socialMedia||[]).filter(function(s){return s.platform||s.handle;})
       .map(function(s){ return '<span class="tag">'+esc(s.platform||"")+(s.handle?': '+esc(s.handle):'')+'</span>'; }).join("");
     var tags = (r.attributes||[]).map(attrLabel);
-    return (r.mainImage?'<div class="detail-hero"><img src="'+esc(r.mainImage)+'" alt="" loading="lazy"><button type="button" class="detail-close" id="detailCloseBtn" title="Cerrar" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'
+    return (r.mainImage?'<div class="detail-hero"><img src="'+esc(normalizeImgUrl(r.mainImage))+'" alt="" loading="lazy"><button type="button" class="detail-close" id="detailCloseBtn" title="Cerrar" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'
       : '<div style="padding:16px 24px 0;text-align:right"><button type="button" class="detail-close" id="detailCloseBtn" style="position:static;background:var(--sv-surface-alt);color:var(--sv-ink)" title="Cerrar" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>')+
       galleryHtml+
       '<div class="detail-body">'+
