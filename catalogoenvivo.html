@@ -267,6 +267,16 @@
   }
   function hasCoords(r){ return r.lat!=null && r.lat!=="" && r.lng!=null && r.lng!==""; }
   function mapsUrl(r){ return "https://www.google.com/maps?q="+encodeURIComponent(r.lat)+","+encodeURIComponent(r.lng); }
+  /* 30/08/2026, a petición de Federico: en la tarjeta del listado, la descripción corta se recorta
+     a 140 caracteres (cortando por palabra completa) para que no descuadre la tarjeta. En la ficha
+     completa (recordDetailHtml) se sigue mostrando entera, sin recortar. */
+  function truncateText(s, max){
+    if(!s || s.length<=max) return s||"";
+    var cut = s.slice(0, max);
+    var lastSpace = cut.lastIndexOf(" ");
+    if(lastSpace>max*0.6) cut = cut.slice(0, lastSpace);
+    return cut.replace(/[\s.,;:–-]+$/, "")+"…";
+  }
   function classesForPool(pool){ return pool==="organizacion" ? ORG_CLASSES : state.resourceClasses; }
   function classInfo(pool, code){
     var list = classesForPool(pool);
@@ -312,7 +322,7 @@
       '<header><h3>'+esc(r.name||"(sin nombre)")+'</h3>'+
       '<div class="card-chips"><span class="chip '+chipClass+'">'+esc(ci?ci.label:(r.classLabel||""))+'</span>'+
       (r.esReligioso?'<span class="chip carmesi">Turismo religioso</span>':'')+'</div></header>'+
-      (r.description?'<p class="desc">'+esc(r.description)+'</p>':'')+
+      (r.description?'<p class="desc">'+esc(truncateText(r.description, 140))+'</p>':'')+
       (addr||r.phone?'<dl>'+
         (addr?'<div><dt>'+ICONS.pin+'Dirección</dt><dd>'+esc(addr)+(hasCoords(r)?' · <a href="'+esc(mapsUrl(r))+'" onclick="event.stopPropagation()">mapa</a>':'')+'</dd></div>':'')+
         (r.phone?'<div><dt>'+ICONS.phone+'Teléfono</dt><dd>'+esc(r.phone)+'</dd></div>':'')+
