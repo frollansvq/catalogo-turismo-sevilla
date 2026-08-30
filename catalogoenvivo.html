@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catálogo Turístico de Sevilla</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23970043'/%3E%3Cpath d='M8 22 L16 9 L24 22 Z' fill='none' stroke='%23dfaa00' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* 21/09/2026, a petición de Federico:
+     1) "quiero poder entrar en cada ficha y ver todo el contenido que está subido, ver también la
+        parte de ontología religiosa" -> cada tarjeta se puede abrir (clic, fuera de la foto) en un
+        panel de detalle a pantalla completa con TODO lo que tiene la ficha: no solo lo que traía la
+        tarjeta resumida, sino también el bloque de turismo religioso completo, MICE, horario y el
+        resto de campos — antes esto solo existía dentro de la herramienta de edición (icono de
+        ojo), marcado explícitamente como "no se publica"; aquí se hace público a propósito, porque
+        es justo lo que ha pedido.
+     2) "diseño moderno y chulo... estética del ayuntamiento de Sevilla" -> paleta de color oficial
+        del Ayuntamiento de Sevilla (manual de identidad visual, colores corporativos): Albero
+        #DFAA00 y Carmesí #970043. No se reproduce el escudo/símbolo NO8DO real (es un símbolo
+        heráldico oficial, no algo para recrear a mano en una herramienta interna) — el marcado del
+        cabecero de abajo es un motivo geométrico propio, solo inspirado en esos colores. */
+  :root{
+    --sv-albero:#dfaa00; --sv-albero-deep:#96700a; --sv-albero-soft:#faedc4;
+    --sv-carmesi:#970043; --sv-carmesi-deep:#6e0032; --sv-carmesi-soft:#f7dfe9;
+    --sv-ink:#1c1712; --sv-ink-soft:#5c5347; --sv-ink-faint:#948a78;
+    --sv-ground:#faf6ec; --sv-surface:#fffdf8; --sv-surface-alt:#f2ead9; --sv-line:#e6dcc2;
+  }
+  @media(prefers-color-scheme:dark){
+    :root{
+      --sv-albero:#f0c04a; --sv-albero-deep:#f3cf74; --sv-albero-soft:#3a2c0c;
+      --sv-carmesi:#e56b9a; --sv-carmesi-deep:#f2a2c0; --sv-carmesi-soft:#3a1420;
+      --sv-ink:#f3efe2; --sv-ink-soft:#c7bfae; --sv-ink-faint:#8f8874;
+      --sv-ground:#141009; --sv-surface:#1c1710; --sv-surface-alt:#241d13; --sv-line:#3a3120;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--sv-ground);color:var(--sv-ink);font-family:"Public Sans",-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.55}
+  a{color:inherit}
+  .sv-header{position:relative;background:linear-gradient(120deg,var(--sv-carmesi-deep),var(--sv-carmesi) 55%,var(--sv-albero-deep));color:#fff;overflow:hidden}
+  .sv-header::before{content:"";position:absolute;inset:0;opacity:.14;background-image:repeating-linear-gradient(135deg,#fff 0 2px,transparent 2px 26px),repeating-linear-gradient(45deg,#fff 0 2px,transparent 2px 26px);pointer-events:none}
+  .sv-header-inner{position:relative;max-width:1120px;margin:0 auto;padding:34px 24px 40px;display:flex;align-items:center;gap:18px}
+  .sv-mark{flex:none;width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+  .sv-eyebrow{margin:0 0 4px;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.82)}
+  .sv-header h1{font-family:"Manrope",sans-serif;font-weight:800;font-size:28px;margin:0;letter-spacing:-.01em}
+  .wrap{max-width:1120px;margin:0 auto;padding:26px 24px 90px}
+  .sub{color:var(--sv-ink-faint);font-size:12.8px;margin:0 0 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .sub button{font:inherit;font-size:12px;font-weight:700;padding:5px 13px;border-radius:99px;border:1px solid var(--sv-line);background:var(--sv-surface);color:var(--sv-ink-soft);cursor:pointer}
+  .sub button:hover{background:var(--sv-surface-alt)}
+  h2{font-family:"Manrope",sans-serif;font-size:16.5px;font-weight:800;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .count{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--sv-ink-faint);font-weight:500}
+  section{margin-bottom:38px}
+  .filter-bar{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 26px;position:sticky;top:0;background:var(--sv-ground);padding:14px 0 12px;z-index:5}
+  .filter-chip{font:inherit;font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:99px;border:1px solid var(--sv-line);background:var(--sv-surface);color:var(--sv-ink-soft);cursor:pointer;white-space:nowrap;transition:background .12s,color .12s,border-color .12s,transform .1s}
+  .filter-chip:hover{background:var(--sv-surface-alt);transform:translateY(-1px)}
+  .filter-chip.active{background:var(--sv-carmesi);border-color:var(--sv-carmesi);color:#fff}
+  .filter-chip .n{opacity:.75;font-family:"IBM Plex Mono",monospace;font-size:10.5px;margin-left:4px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+  .card{background:var(--sv-surface);border:1px solid var(--sv-line);border-radius:16px;padding:16px;overflow:hidden;transition:box-shadow .16s,transform .16s;cursor:pointer}
+  .cards .card:hover{box-shadow:0 14px 30px -14px rgba(28,23,18,.32);transform:translateY(-3px);border-color:var(--sv-albero)}
+  .card-img{width:calc(100% + 32px);margin:-16px -16px 12px;display:block;height:180px;object-fit:cover;background:var(--sv-surface-alt);cursor:zoom-in}
+  .gallery-strip{display:flex;gap:6px;margin:0 0 12px;overflow-x:auto}
+  .card-img-thumb{width:52px;height:52px;flex:none;border-radius:9px;object-fit:cover;cursor:zoom-in;border:1px solid var(--sv-line);background:var(--sv-surface-alt)}
+  .card header,.detail-head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
+  .card h3{font-family:"Manrope",sans-serif;font-weight:700;font-size:14.8px;margin:0}
+  .card-chips{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+  .desc{font-size:12.8px;color:var(--sv-ink-soft);margin:0 0 10px}
+  .chip{font-size:10.8px;font-weight:800;padding:3px 9px;border-radius:99px;white-space:nowrap;flex:none;letter-spacing:.01em}
+  .chip.albero{background:var(--sv-albero-soft);color:var(--sv-albero-deep)}
+  .chip.carmesi{background:var(--sv-carmesi-soft);color:var(--sv-carmesi)}
+  .chip.neutral{background:var(--sv-surface-alt);color:var(--sv-ink-soft);border:1px solid var(--sv-line)}
+  dl{margin:0 0 10px;font-size:12.3px}dl div{display:flex;gap:7px;padding:3px 0;align-items:flex-start}dt{color:var(--sv-ink-faint);min-width:110px;flex:none;display:flex;align-items:center;gap:5px}dd{margin:0;word-break:break-word}
+  dt svg{flex:none;opacity:.8}
+  .mono{font-family:"IBM Plex Mono",monospace;font-size:11px}
+  .tags{display:flex;flex-wrap:wrap;gap:5px}.tag{font-size:10.8px;background:var(--sv-surface-alt);border:1px solid var(--sv-line);color:var(--sv-ink-soft);padding:3px 9px;border-radius:99px}
+  .translations{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;padding:9px 11px;background:var(--sv-albero-soft);border-radius:9px}
+  .translation{font-size:11.5px;color:var(--sv-albero-deep)}.lang-tag{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:800;background:var(--sv-surface);border:1px solid var(--sv-line);border-radius:4px;padding:1px 4px;margin-right:4px}
+  .lightbox{position:fixed;inset:0;background:rgba(15,10,8,.88);display:flex;align-items:center;justify-content:center;padding:26px;z-index:999;cursor:zoom-out}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .state-msg{padding:70px 20px;text-align:center;color:var(--sv-ink-faint);font-size:13.5px}
+  .state-msg.err{color:var(--sv-carmesi)}
+  .spinner{width:22px;height:22px;border-radius:50%;border:3px solid var(--sv-line);border-top-color:var(--sv-carmesi);margin:0 auto 14px;animation:cs-spin .8s linear infinite}
+  @keyframes cs-spin{to{transform:rotate(360deg)}}
+
+  /* ---- Panel de detalle (ficha completa) ---- */
+  .detail-overlay{position:fixed;inset:0;z-index:200;background:rgba(15,10,8,.5);display:flex;justify-content:flex-end}
+  .detail-overlay[hidden]{display:none}
+  .detail-panel{width:min(680px,100%);max-width:100%;height:100%;background:var(--sv-surface);overflow-y:auto;box-shadow:-24px 0 60px rgba(0,0,0,.28);animation:sv-slide-in .22s ease-out}
+  @keyframes sv-slide-in{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
+  .detail-hero{position:relative}
+  .detail-hero img{width:100%;height:260px;object-fit:cover;display:block;background:var(--sv-surface-alt);cursor:zoom-in}
+  .detail-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(20,15,10,.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(3px)}
+  .detail-close:hover{background:rgba(20,15,10,.75)}
+  .detail-gallery{display:flex;gap:6px;padding:12px 24px 0}
+  .detail-gallery img{width:64px;height:64px;border-radius:9px;object-fit:cover;cursor:zoom-in;border:1px solid var(--sv-line)}
+  .detail-body{padding:20px 24px 60px}
+  .detail-body h1{font-family:"Manrope",sans-serif;font-weight:800;font-size:22px;margin:0 0 8px;letter-spacing:-.01em}
+  .detail-body .desc{font-size:13.5px}
+  .detail-body .desc.long{white-space:pre-wrap}
+  .detail-section{margin-top:20px;padding-top:18px;border-top:1px solid var(--sv-line)}
+  .detail-section h4{font-family:"Manrope",sans-serif;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--sv-carmesi);margin:0 0 10px}
+  .detail-list{margin:0 0 8px;padding-left:18px;font-size:12.8px}.detail-list li{margin-bottom:5px}
+  .no-content{color:var(--sv-ink-faint);text-align:center;padding:50px 20px}
+</style>
+</head>
+<body>
+<header class="sv-header">
+  <div class="sv-header-inner">
+    <div class="sv-mark" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 19 12 5 20 19Z" stroke="#dfaa00" stroke-width="2.2" stroke-linejoin="round"/></svg>
+    </div>
+    <div>
+      <p class="sv-eyebrow">Oficina de Turismo Inteligente de Sevilla</p>
+      <h1>Catálogo Turístico de Sevilla</h1>
+    </div>
+  </div>
+</header>
+<div class="wrap">
+  <p class="sub" id="subLine">Conectando con la base de datos en directo…</p>
+  <div id="content"><div class="state-msg"><div class="spinner"></div>Cargando fichas…</div></div>
+</div>
+<div class="detail-overlay" id="detailOverlay" hidden>
+  <div class="detail-panel" id="detailPanel"></div>
+</div>
+<script>
+(function(){
+  /* URL del mismo Web App de Apps Script que usa la herramienta de edición (engranaje -> "URL del
+     Web App de Apps Script"). Si algún día se vuelve a desplegar y cambia la URL, hay que actualizar
+     esta constante y volver a subir el archivo. */
+  var DB_URL = "https://script.google.com/macros/s/AKfycbwW8ZUe1aUSYaAJ_3VFZFrYkNeyZ1XvJdYpBiJV2CYcP02yFHdyOxtedB-5x8xx755E/exec";
+
+  var POOLS = [
+    {id:"organizacion", label:"Organizaciones turísticas"},
+    {id:"otro", label:"Otros recursos turísticos"}
+  ];
+  var LANGS = [
+    {code:"en", label:"Inglés"},
+    {code:"fr", label:"Francés"},
+    {code:"de", label:"Alemán"}
+  ];
+  var DIAS_SEMANA = [
+    {key:"lunes", label:"Lunes"}, {key:"martes", label:"Martes"}, {key:"miercoles", label:"Miércoles"},
+    {key:"jueves", label:"Jueves"}, {key:"viernes", label:"Viernes"}, {key:"sabado", label:"Sábado"}, {key:"domingo", label:"Domingo"}
+  ];
+  var RELIGIOUS_CURRENT_USE = [
+    {code:"ActiveWorship", label:"Culto activo"}, {code:"CulturalVisitOnly", label:"Solo visita cultural"},
+    {code:"BothWorshipAndVisit", label:"Culto y visita"}, {code:"Desacralized", label:"Desacralizado"}, {code:"Ruined", label:"En ruinas"}
+  ];
+  var RELIGIOUS_HERITAGE_STATUS = [
+    {code:"UNESCO", label:"UNESCO"}, {code:"BIC", label:"BIC"}, {code:"PatrimonioEuropeo", label:"Patrimonio Europeo"},
+    {code:"Catalogado", label:"Catalogado"}, {code:"SinReconocimiento", label:"Sin reconocimiento"}
+  ];
+  var RELIGIOUS_CONSERVATION_STATUS = [
+    {code:"Excelente", label:"Excelente"}, {code:"Bueno", label:"Bueno"}, {code:"Regular", label:"Regular"}, {code:"Deficiente", label:"Deficiente"}
+  ];
+  /* Igual que en la herramienta de edición: las 7 clases de "Organizaciones turísticas" son una
+     lista fija (no se editan desde el engranaje, así que no llegan por la API), mientras que "Otros
+     recursos turísticos" sí depende de la configuración guardada en la hoja — ver ORG_CLASSES en
+     catalogo-semantico-turismo-sevilla.html, de donde se ha copiado tal cual. */
+  var CORE_NS = "https://ontologia.segittur.es/turismo/def/core#";
+  var ORG_CLASSES = [
+    {code:"AccommodationCompany", label:"Empresa de alojamiento", uri:CORE_NS+"AccommodationCompany"},
+    {code:"RestaurantCompany", label:"Empresa de restauración", uri:CORE_NS+"RestaurantCompany"},
+    {code:"EventOrganisationCompany", label:"Empresa de organización de eventos", uri:CORE_NS+"EventOrganisationCompany"},
+    {code:"ComplementaryActivitiesCompany", label:"Empresa de actividades complementarias", uri:CORE_NS+"ComplementaryActivitiesCompany"},
+    {code:"PassengerTransportCompany", label:"Compañía de transporte de viajeros", uri:CORE_NS+"PassengerTransportCompany"},
+    {code:"TourismIntermediary", label:"Intermediario turístico", uri:CORE_NS+"TourismIntermediary"},
+    {code:"TourGuide", label:"Guía turístico", uri:CORE_NS+"TourGuide"}
+  ];
+  var state = { records:[], resourceClasses:[], religiousCategories:[], attributeGroups:[] };
+  var recordsById = {};
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+  function poolLabel(id){ var p=POOLS.filter(function(x){return x.id===id;})[0]; return p?p.label:id; }
+  function formatAddress(r){
+    var line = [r.street, r.number].filter(Boolean).join(", ");
+    if(r.postalCode) line = (line?line+" · ":"")+r.postalCode;
+    return line;
+  }
+  function hasCoords(r){ return r.lat!=null && r.lat!=="" && r.lng!=null && r.lng!==""; }
+  function mapsUrl(r){ return "https://www.google.com/maps?q="+encodeURIComponent(r.lat)+","+encodeURIComponent(r.lng); }
+  function classesForPool(pool){ return pool==="organizacion" ? ORG_CLASSES : state.resourceClasses; }
+  function classInfo(pool, code){
+    var list = classesForPool(pool);
+    for(var i=0;i<list.length;i++){ if(list[i].code===code) return list[i]; }
+    return null;
+  }
+  function allAttrItems(){
+    var out=[];
+    (state.attributeGroups||[]).forEach(function(g){ (g.items||[]).forEach(function(it){ out.push({key:it.key, label:it.label}); }); });
+    return out;
+  }
+  function attrLabel(key){
+    var found = allAttrItems().filter(function(a){return a.key===key;})[0];
+    return found ? found.label : key;
+  }
+  function codeLabel_(list, code){ var f = list.filter(function(x){ return x.code===code; })[0]; return f ? f.label : code; }
+
+  /* Pequeños iconos en línea (sin dependencias) para las filas de contacto del panel de detalle. */
+  var ICONS = {
+    pin: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+    phone: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg>',
+    mail: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4V5Z"/><path d="m4 6 8 7 8-7"/></svg>',
+    web: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg>',
+    tag: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 12-8 8-9-9V4h7l10 8Z"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/></svg>'
+  };
+
+  function recordCardHtml(r, chipClass, cardClassLabel){
+    var ci = classInfo(r.pool, r.classCode);
+    var tags = (r.attributes||[]).map(attrLabel);
+    var addr = formatAddress(r);
+    var translationsBlock = LANGS.map(function(l){
+      var t = (r.translations && r.translations[l.code]) || {};
+      if(!t.name && !t.description) return "";
+      return '<div class="translation"><span class="lang-tag">'+esc(l.code.toUpperCase())+'</span> '+
+        (t.name?'<b>'+esc(t.name)+'</b>':'')+(t.description?' — '+esc(t.description):'')+'</div>';
+    }).join("");
+    var extraImgs = (r.additionalImages||[]).filter(Boolean);
+    var galleryHtml = extraImgs.length ?
+      '<div class="gallery-strip">'+extraImgs.map(function(u){ return '<img class="card-img-thumb" src="'+esc(u)+'" alt="" loading="lazy">'; }).join("")+'</div>' : "";
+    return '<article class="card" data-cardclass="'+esc(cardClassLabel||"")+'" data-recordid="'+esc(r.id)+'">'+
+      (r.mainImage?'<img class="card-img" src="'+esc(r.mainImage)+'" alt="" loading="lazy">':'')+
+      galleryHtml+
+      '<header><h3>'+esc(r.name||"(sin nombre)")+'</h3>'+
+      '<div class="card-chips"><span class="chip '+chipClass+'">'+esc(ci?ci.label:(r.classLabel||""))+'</span>'+
+      (r.esReligioso?'<span class="chip carmesi">Turismo religioso</span>':'')+'</div></header>'+
+      (r.description?'<p class="desc">'+esc(r.description)+'</p>':'')+
+      (addr||r.phone?'<dl>'+
+        (addr?'<div><dt>'+ICONS.pin+'Dirección</dt><dd>'+esc(addr)+(hasCoords(r)?' · <a href="'+esc(mapsUrl(r))+'" onclick="event.stopPropagation()">mapa</a>':'')+'</dd></div>':'')+
+        (r.phone?'<div><dt>'+ICONS.phone+'Teléfono</dt><dd>'+esc(r.phone)+'</dd></div>':'')+
+      '</dl>':'')+
+      (translationsBlock?'<div class="translations">'+translationsBlock+'</div>':'')+
+      (tags.length?'<div class="tags">'+tags.slice(0,6).map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+(tags.length>6?'<span class="tag">+'+(tags.length-6)+'</span>':'')+'</div>':'')+
+    '</article>';
+  }
+
+  /* ---- Bloques del panel de detalle (ficha completa) — 21/09/2026 a petición de Federico ---- */
+  function religiousBlockHtml_(r){
+    if(!r.esReligioso) return "";
+    var entradas = (r.entradasReligiosas||[]).filter(function(en){ return en.categoriaCode||en.tradicion||en.epoca||en.nota; });
+    var entradasHtml = entradas.length ? '<ul class="detail-list">'+entradas.map(function(en){
+      var catInfo = (state.religiousCategories||[]).filter(function(c){ return c.code===en.categoriaCode; })[0];
+      var catLabel = catInfo ? catInfo.label : (en.categoriaCode||"");
+      var tradLabel = en.tradicion ? attrLabel(en.tradicion) : "";
+      var base = [catLabel, tradLabel].filter(Boolean).join(" / ") || "(sin categoría ni tradición)";
+      return '<li>'+esc(base)+(en.epoca?' — '+esc(en.epoca):'')+(en.nota?' ('+esc(en.nota)+')':'')+'</li>';
+    }).join("")+'</ul>' : "";
+    var estadoBits = [
+      r.usoActualReligioso ? "Uso actual: "+codeLabel_(RELIGIOUS_CURRENT_USE, r.usoActualReligioso) : "",
+      r.estatusPatrimonialReligioso ? "Estatus patrimonial: "+codeLabel_(RELIGIOUS_HERITAGE_STATUS, r.estatusPatrimonialReligioso) : "",
+      r.estadoConservacion ? "Conservación: "+codeLabel_(RELIGIOUS_CONSERVATION_STATUS, r.estadoConservacion) : ""
+    ].filter(Boolean);
+    var identidadBits = [
+      r.tipoTrel ? "Tipo: "+r.tipoTrel : "", r.advocacion ? "Advocación: "+r.advocacion : "",
+      r.ordenHermandad ? "Orden/hermandad: "+r.ordenHermandad : "", r.festividad ? "Festividad: "+r.festividad : ""
+    ].filter(Boolean);
+    var religiousTags = (r.attributes||[]).filter(function(k){
+      return (state.attributeGroups||[]).some(function(g){
+        return ["gastronomia_religiosa","hospederia_religiosa","artesania_sacra"].indexOf(g.key)!==-1 && (g.items||[]).some(function(it){ return it.key===k; });
+      });
+    }).map(attrLabel);
+    var extraBits = [
+      r.certificacionEntidad ? "Organismo certificador: "+r.certificacionEntidad : "", r.conventoBase ? "Convento/monasterio base: "+r.conventoBase : "",
+      r.ambito ? "Ámbito: "+r.ambito : "", r.rangoPrecios ? "Rango de precios: "+r.rangoPrecios : ""
+    ].filter(Boolean);
+    if(!entradasHtml && !estadoBits.length && !identidadBits.length && !religiousTags.length && !extraBits.length) return "";
+    return '<div class="detail-section"><h4>Turismo religioso</h4>'+
+      entradasHtml+
+      (estadoBits.length?'<p class="desc">'+estadoBits.map(esc).join(" · ")+'</p>':'')+
+      (identidadBits.length?'<p class="desc">'+identidadBits.map(esc).join(" · ")+'</p>':'')+
+      (religiousTags.length?'<div class="tags">'+religiousTags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>':'')+
+      (extraBits.length?'<p class="desc">'+extraBits.map(esc).join(" · ")+'</p>':'')+
+    '</div>';
+  }
+  function miceBlockHtml_(r){
+    if(!r.esMice) return "";
+    var bits = [
+      r.tipoProveedorMice ? "Tipo de proveedor: "+r.tipoProveedorMice : "", r.disponeAlojamientoPropio ? "Dispone de alojamiento propio" : "",
+      r.numHabitaciones ? "Nº habitaciones: "+r.numHabitaciones : "", r.miembroConventionBureau ? "Miembro del Sevilla Convention Bureau" : "",
+      r.tipoSedeMice ? "Tipo de sede: "+r.tipoSedeMice : ""
+    ].filter(Boolean);
+    var salas = (r.salasEventosMice||[]).filter(function(s){ return s.nombre; });
+    var salasHtml = salas.length ? '<ul class="detail-list">'+salas.map(function(s){
+      return '<li>'+esc(s.nombre)+' — teatro: '+esc(s.teatro||"–")+', escuela: '+esc(s.escuela||"–")+', U: '+esc(s.formaU||"–")+
+        ', banquete: '+esc(s.banquete||"–")+', cóctel: '+esc(s.coctel||"–")+', expo: '+esc(s.exposicion||"–")+'</li>';
+    }).join("")+'</ul>' : "";
+    if(!bits.length && !salasHtml) return "";
+    return '<div class="detail-section"><h4>MICE (turismo de negocio)</h4>'+(bits.length?'<p class="desc">'+bits.map(esc).join(" · ")+'</p>':'')+salasHtml+'</div>';
+  }
+  function horarioBlockHtml_(r){
+    var h = r.horario;
+    if(!h) return "";
+    if(h.abierto24h) return '<div class="detail-section"><h4>Horario</h4><p class="desc">Abierto 24 horas.</p></div>';
+    var lines = DIAS_SEMANA.map(function(d){
+      var day = h.dias && h.dias[d.key];
+      if(!day) return "";
+      var t1 = (day.turno1 && day.turno1.apertura && day.turno1.cierre) ? day.turno1.apertura+"–"+day.turno1.cierre : "";
+      var t2 = (day.turno2 && day.turno2.apertura && day.turno2.cierre) ? day.turno2.apertura+"–"+day.turno2.cierre : "";
+      var franjas = [t1, t2].filter(Boolean).join(", ");
+      return franjas ? '<li>'+esc(d.label)+": "+esc(franjas)+'</li>' : "";
+    }).filter(Boolean);
+    if(!lines.length && !h.cierreTemporal) return "";
+    return '<div class="detail-section"><h4>Horario</h4>'+
+      (lines.length?'<ul class="detail-list">'+lines.join("")+'</ul>':'<p class="desc">Sin horario detallado.</p>')+
+      (h.cierreTemporal?'<p class="desc">⚠ Cierre temporal activo.</p>':'')+'</div>';
+  }
+  function extraInfoBlockHtml_(r){
+    var bits = [];
+    if(r.descriptionLong) bits.push('<p class="desc long">'+esc(r.descriptionLong)+'</p>');
+    var kws = (r.keywords||[]).filter(Boolean);
+    if(kws.length) bits.push('<div class="tags">'+kws.map(function(k){return '<span class="tag">'+esc(k)+'</span>';}).join("")+'</div>');
+    if(r.observaciones) bits.push('<p class="desc"><b>Observaciones:</b> '+esc(r.observaciones)+'</p>');
+    if(r.curiosidades) bits.push('<p class="desc"><b>Curiosidades:</b> '+esc(r.curiosidades)+'</p>');
+    if(r.condiciones) bits.push('<p class="desc"><b>Condiciones:</b> '+esc(r.condiciones)+'</p>');
+    if(r.consejoAcceder) bits.push('<p class="desc"><b>Consejo para acceder:</b> '+esc(r.consejoAcceder)+'</p>');
+    var faqs = (r.faqs||[]).filter(function(f){ return f.pregunta||f.respuesta; });
+    if(faqs.length) bits.push('<ul class="detail-list">'+faqs.map(function(f){ return '<li><b>'+esc(f.pregunta||"")+'</b> — '+esc(f.respuesta||"")+'</li>'; }).join("")+'</ul>');
+    if(r.accesoPublico) bits.push('<p class="desc"><b>Acceso público:</b> '+esc(r.accesoPublico)+'</p>');
+    if(r.aforo) bits.push('<p class="desc"><b>Aforo:</b> '+esc(r.aforo)+'</p>');
+    var reconoc = (r.reconocimientos||[]).filter(function(rc){ return rc.reconocimiento||rc.reconocidoPor; });
+    if(reconoc.length) bits.push('<div class="tags">'+reconoc.map(function(rc){ return '<span class="tag">'+esc(rc.reconocimiento||"")+(rc.reconocidoPor?' ('+esc(rc.reconocidoPor)+')':'')+'</span>'; }).join("")+'</div>');
+    var chips = [].concat(r.metodoPago||[], r.unidadViaje||[], r.tipoTurista||[], r.servicioAdicionalHistoricoCultural||[]);
+    if(chips.length) bits.push('<div class="tags">'+chips.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>');
+    if(!bits.length) return "";
+    return '<div class="detail-section"><h4>Información adicional</h4>'+bits.join("")+'</div>';
+  }
+  function ontologyBlockHtml_(r, ci){
+    var bits = [];
+    if(ci && ci.uri) bits.push('<div><dt>'+ICONS.tag+'Clase (ontología)</dt><dd class="mono">'+esc(ci.uri)+'</dd></div>');
+    if(r.sourceUri) bits.push('<div><dt>'+ICONS.tag+'Origen</dt><dd class="mono"><a href="'+esc(r.sourceUri)+'">'+esc(r.sourceUri)+'</a></dd></div>');
+    if(!bits.length) return "";
+    return '<div class="detail-section"><h4>Ontología / origen del dato</h4><dl>'+bits.join("")+'</dl></div>';
+  }
+
+  function recordDetailHtml(r){
+    var ci = classInfo(r.pool, r.classCode);
+    var chipClass = r.pool==="organizacion" ? "albero" : "neutral";
+    var label = (ci ? ci.label : r.className) || "Sin categoría";
+    var addr = formatAddress(r);
+    var extraImgs = (r.additionalImages||[]).filter(Boolean);
+    var galleryHtml = extraImgs.length ? '<div class="detail-gallery">'+extraImgs.map(function(u){ return '<img src="'+esc(u)+'" alt="" loading="lazy">'; }).join("")+'</div>' : "";
+    var translationsBlock = LANGS.map(function(l){
+      var t = (r.translations && r.translations[l.code]) || {};
+      if(!t.name && !t.description) return "";
+      return '<div class="translation"><span class="lang-tag">'+esc(l.code.toUpperCase())+'</span> '+(t.name?'<b>'+esc(t.name)+'</b>':'')+(t.description?' — '+esc(t.description):'')+'</div>';
+    }).join("");
+    var socialLinks = (r.socialMedia||[]).filter(function(s){return s.platform||s.handle;})
+      .map(function(s){ return '<span class="tag">'+esc(s.platform||"")+(s.handle?': '+esc(s.handle):'')+'</span>'; }).join("");
+    var tags = (r.attributes||[]).map(attrLabel);
+    return (r.mainImage?'<div class="detail-hero"><img src="'+esc(r.mainImage)+'" alt="" loading="lazy"><button type="button" class="detail-close" id="detailCloseBtn" title="Cerrar" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'
+      : '<div style="padding:16px 24px 0;text-align:right"><button type="button" class="detail-close" id="detailCloseBtn" style="position:static;background:var(--sv-surface-alt);color:var(--sv-ink)" title="Cerrar" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>')+
+      galleryHtml+
+      '<div class="detail-body">'+
+      '<div class="detail-head-row"><h1>'+esc(r.name||"(sin nombre)")+'</h1></div>'+
+      '<div class="card-chips" style="flex-direction:row;margin-bottom:12px"><span class="chip '+chipClass+'">'+esc(label)+'</span>'+(r.esReligioso?'<span class="chip carmesi">Turismo religioso</span>':'')+(r.esMice?'<span class="chip neutral">MICE</span>':'')+'</div>'+
+      (r.description?'<p class="desc">'+esc(r.description)+'</p>':'')+
+      '<dl>'+
+        (addr?'<div><dt>'+ICONS.pin+'Dirección</dt><dd>'+esc(addr)+(hasCoords(r)?' · <a href="'+esc(mapsUrl(r))+'" target="_blank" rel="noopener">ver en el mapa</a>':'')+'</dd></div>':'')+
+        (r.phone?'<div><dt>'+ICONS.phone+'Teléfono</dt><dd>'+esc(r.phone)+'</dd></div>':'')+
+        (r.email?'<div><dt>'+ICONS.mail+'Email</dt><dd>'+esc(r.email)+'</dd></div>':'')+
+        (r.website?'<div><dt>'+ICONS.web+'Web</dt><dd><a href="'+esc(r.website)+'" target="_blank" rel="noopener">'+esc(r.website)+'</a></dd></div>':'')+
+      '</dl>'+
+      (translationsBlock?'<div class="translations">'+translationsBlock+'</div>':'')+
+      (socialLinks?'<div class="tags" style="margin-bottom:10px">'+socialLinks+'</div>':'')+
+      (tags.length?'<div class="tags">'+tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>':'')+
+      religiousBlockHtml_(r)+
+      miceBlockHtml_(r)+
+      horarioBlockHtml_(r)+
+      extraInfoBlockHtml_(r)+
+      ontologyBlockHtml_(r, ci)+
+      '</div>';
+  }
+
+  function openLightbox(src, container){
+    var box = document.createElement("div"); box.className = "lightbox";
+    var big = document.createElement("img"); big.src = src; box.appendChild(big);
+    box.addEventListener("click", function(){ box.remove(); });
+    (container || document.body).appendChild(box);
+  }
+
+  function openDetail(id, pushHash){
+    var r = recordsById[id];
+    if(!r) return;
+    document.getElementById("detailPanel").innerHTML = recordDetailHtml(r);
+    document.getElementById("detailOverlay").hidden = false;
+    document.body.style.overflow = "hidden";
+    document.getElementById("detailPanel").scrollTop = 0;
+    document.getElementById("detailCloseBtn").addEventListener("click", closeDetail);
+    document.getElementById("detailPanel").querySelectorAll(".detail-hero img, .detail-gallery img").forEach(function(img){
+      img.addEventListener("click", function(){ openLightbox(img.src, document.getElementById("detailPanel")); });
+    });
+    if(pushHash !== false) location.hash = "f=" + id;
+  }
+  function closeDetail(clearHash){
+    document.getElementById("detailOverlay").hidden = true;
+    document.body.style.overflow = "";
+    if(clearHash !== false && location.hash) history.pushState("", document.title, location.pathname + location.search);
+  }
+  document.getElementById("detailOverlay").addEventListener("click", function(e){ if(e.target===e.currentTarget) closeDetail(); });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape" && !document.getElementById("detailOverlay").hidden) closeDetail(); });
+  window.addEventListener("hashchange", function(){
+    var m = /f=([^&]+)/.exec(location.hash);
+    if(m && recordsById[decodeURIComponent(m[1])]) openDetail(decodeURIComponent(m[1]), false);
+    else closeDetail(false);
+  });
+
+  function renderCatalog(records){
+    recordsById = {};
+    records.forEach(function(r){ recordsById[r.id] = r; });
+    var byPool = {};
+    POOLS.forEach(function(p){ byPool[p.id] = records.filter(function(r){return r.pool===p.id;}); });
+    var classCounts = {}, classOrder = [];
+    records.forEach(function(r){
+      var ci = classInfo(r.pool, r.classCode);
+      var label = (ci ? ci.label : r.classLabel) || "Sin categoría";
+      if(classCounts[label]===undefined){ classCounts[label]=0; classOrder.push(label); }
+      classCounts[label]++;
+    });
+    classOrder.sort(function(a,b){ return classCounts[b]-classCounts[a] || a.localeCompare(b,"es"); });
+    var filterBarHtml = '<div class="filter-bar" id="csFilterBar">'+
+      '<button type="button" class="filter-chip active" data-filterclass="">Todas <span class="n">'+records.length+'</span></button>'+
+      classOrder.map(function(label){
+        return '<button type="button" class="filter-chip" data-filterclass="'+esc(label)+'">'+esc(label)+' <span class="n">'+classCounts[label]+'</span></button>';
+      }).join("")+'</div>';
+    function section(pool){
+      var recs = byPool[pool];
+      if(!recs.length) return "";
+      var chipClass = pool==="organizacion"?"albero":"neutral";
+      var rows = recs.map(function(r){
+        var ci = classInfo(r.pool, r.classCode);
+        var label = (ci ? ci.label : r.classLabel) || "Sin categoría";
+        return recordCardHtml(r, chipClass, label);
+      }).join("");
+      return '<section data-poolsection="'+esc(pool)+'"><h2>'+esc(poolLabel(pool))+' <span class="count">'+recs.length+'</span></h2><div class="cards">'+rows+'</div></section>';
+    }
+    var content = document.getElementById("content");
+    if(!records.length){
+      content.innerHTML = '<div class="state-msg">Todavía no hay fichas publicadas en el catálogo.</div>';
+      return;
+    }
+    content.innerHTML = filterBarHtml + section("organizacion") + section("otro");
+    var bar = document.getElementById("csFilterBar");
+    bar.addEventListener("click", function(e){
+      var btn = e.target.closest(".filter-chip"); if(!btn) return;
+      bar.querySelectorAll(".filter-chip").forEach(function(b){ b.classList.toggle("active", b===btn); });
+      var wanted = btn.getAttribute("data-filterclass");
+      content.querySelectorAll(".card").forEach(function(card){
+        var show = !wanted || card.getAttribute("data-cardclass")===wanted;
+        card.style.display = show ? "" : "none";
+      });
+      content.querySelectorAll("section[data-poolsection]").forEach(function(sec){
+        var anyVisible = Array.prototype.some.call(sec.querySelectorAll(".card"), function(c){ return c.style.display!=="none"; });
+        sec.style.display = anyVisible ? "" : "none";
+      });
+    });
+    /* Clic en una imagen de la tarjeta -> lupa. Clic en cualquier otra parte de la tarjeta -> abre
+       el panel de detalle completo (21/09/2026, a petición de Federico: "quiero poder entrar en
+       cada ficha y ver todo el contenido que está subido"). El enlace del mapa lleva su propio
+       stopPropagation() para que no abra el panel por encima al pinchar en él. */
+    content.addEventListener("click", function(e){
+      var img = e.target.closest(".card-img, .card-img-thumb");
+      if(img){ openLightbox(img.src, img.closest(".card")); return; }
+      var link = e.target.closest("a"); if(link) return; // dejar que los enlaces normales funcionen
+      var card = e.target.closest(".card");
+      if(card) openDetail(card.getAttribute("data-recordid"));
+    });
+    // Si la URL ya trae #f=<id> al cargar (enlace directo a una ficha), abrirla de una vez.
+    var m = /f=([^&]+)/.exec(location.hash);
+    if(m && recordsById[decodeURIComponent(m[1])]) openDetail(decodeURIComponent(m[1]), false);
+  }
+
+  function fmtHora(d){ return d.toLocaleString("es-ES"); }
+  function setSubLine(html){ document.getElementById("subLine").innerHTML = html; }
+
+  function cargar(){
+    document.getElementById("content").innerHTML = '<div class="state-msg"><div class="spinner"></div>Cargando fichas…</div>';
+    setSubLine("Conectando con la base de datos en directo…");
+    fetch(DB_URL + (DB_URL.indexOf("?")===-1 ? "?" : "&") + "action=all", {method:"GET"})
+      .then(function(res){
+        if(!res.ok){ var e = new Error("HTTP "+res.status); e.httpStatus = res.status; throw e; }
+        return res.text();
+      })
+      .then(function(text){
+        var data;
+        try{ data = JSON.parse(text); }
+        catch(parseErr){
+          var e2 = new Error("La respuesta no es JSON — empieza así: «"+text.slice(0,120)+"»");
+          e2.notJson = true;
+          throw e2;
+        }
+        if(!data || data.ok !== true) throw new Error((data && data.error) || "Respuesta inválida de la base de datos");
+        return data;
+      })
+      .then(function(data){
+        state.records = Array.isArray(data.records) ? data.records : [];
+        if(Array.isArray(data.resourceClasses)) state.resourceClasses = data.resourceClasses;
+        if(Array.isArray(data.religiousCategories)) state.religiousCategories = data.religiousCategories;
+        if(Array.isArray(data.attributeGroups)) state.attributeGroups = data.attributeGroups;
+        renderCatalog(state.records);
+        setSubLine('Datos en directo · actualizado a las '+esc(fmtHora(new Date()))+' · '+state.records.length+' fichas '+
+          '<button type="button" id="refreshBtn">↻ Actualizar</button>');
+        document.getElementById("refreshBtn").addEventListener("click", cargar);
+      })
+      .catch(function(err){
+        var msg;
+        if(err && err.notJson){
+          msg = "El Web App respondió, pero no con datos (JSON). Lo más probable es que el despliegue de Apps Script no tenga acceso «Cualquier usuario» — sin eso, un visitante que no sea del equipo no puede ver el catálogo. Revisa en Apps Script → Implementar → Gestionar implementaciones.";
+        } else if(err && err.httpStatus){
+          msg = "El servidor respondió con un error (HTTP "+err.httpStatus+"). Puede que el despliegue esté caído o mal configurado.";
+        } else {
+          msg = "No se ha podido conectar con la base de datos en directo ("+esc((err && err.message) || String(err))+"). Puede ser un problema de conexión, o que el despliegue de Apps Script no permita el acceso público.";
+        }
+        document.getElementById("content").innerHTML = '<div class="state-msg err">⚠ '+msg+'</div>';
+        setSubLine('No se ha podido cargar <button type="button" id="refreshBtn">↻ Reintentar</button>');
+        document.getElementById("refreshBtn").addEventListener("click", cargar);
+      });
+  }
+
+  cargar();
+})();
+</script>
+</body>
+</html>
