@@ -224,17 +224,37 @@
   function qMissingClass(r){ return !r.classCode; }
   function qMissingAddress(r){ return !r.street; }
   function qMissingVerificado(r){ return r.estado !== "verificado"; }
+  /* No es "campo incompleto" en sentido estricto, es el filtro inverso (a petición de Federico,
+     30/08/2026): ver las fichas que SÍ están verificadas, aparte de las que están pendientes.
+     Reutiliza el mismo mecanismo de botón/contador que el resto — solo cambia qué cuenta como match. */
+  function qVerificadoSi(r){ return r.estado === "verificado"; }
   function qMissingMainImage(r){ return !r.mainImage; }
   function qMissingCoords(r){ return !(r.lat!=null && r.lat!=="" && r.lng!=null && r.lng!==""); }
+  /* Accesibilidad: cualquier etiqueta de los grupos "movilidad" (Accesibilidad física) o "sensorial"
+     (Accesibilidad sensorial/cognitiva) marcada en la ficha cuenta como "sí tiene selección". */
+  function qAccesibilidadAttrKeys(){
+    var groups = (state.attributeGroups||[]).filter(function(g){ return g.key==="movilidad" || g.key==="sensorial"; });
+    var keys = [];
+    groups.forEach(function(g){ (g.items||[]).forEach(function(it){ keys.push(it.key); }); });
+    return keys;
+  }
+  function qMissingAccesibilidad(r){
+    var keys = qAccesibilidadAttrKeys();
+    var attrs = r.attributes || [];
+    if(keys.length) return !attrs.some(function(a){ return keys.indexOf(a) !== -1; });
+    return !attrs.some(function(a){ return a.indexOf("mov_")===0 || a.indexOf("sen_")===0; });
+  }
   var MISSING_FIELD_CHECKS = [
     {key:"nombreEn", label:"Nombre en inglés", test:qMissingNombreEn},
     {key:"descripcionEn", label:"Descripción en inglés", test:qMissingDescripcionEn},
     {key:"categoria", label:"Categoría o clase seleccionada", test:qMissingClass},
     {key:"direccion", label:"Dirección", test:qMissingAddress},
     {key:"barrio", label:"Barrio por definir", test:qMissingBarrio},
-    {key:"verificado", label:"Sin verificar", test:qMissingVerificado},
     {key:"imagenCabecera", label:"Imagen de cabecera (enlace)", test:qMissingMainImage},
-    {key:"coordenadas", label:"Coordenadas (lat/lng)", test:qMissingCoords}
+    {key:"coordenadas", label:"Coordenadas (lat/lng)", test:qMissingCoords},
+    {key:"accesibilidad", label:"Sin ninguna selección de accesibilidad", test:qMissingAccesibilidad},
+    {key:"verificado", label:"Sin verificar (pendientes)", test:qMissingVerificado},
+    {key:"verificadoSi", label:"Verificadas", test:qVerificadoSi}
   ];
   function missingKeysFor(r){
     return MISSING_FIELD_CHECKS.filter(function(c){ return c.test(r); }).map(function(c){ return c.key; });
