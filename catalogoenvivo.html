@@ -185,6 +185,88 @@
     if(m && m[1]) return "https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1600";
     return u;
   }
+  /* 30/08/2026, a petición de Federico: navegación principal del catálogo por "tipo de turista",
+     usando el mismo campo cerrado "Tipo de turista" que ya existe en la ficha de edición (variable
+     TOURIST_TYPES en catalogo-semantico-turismo-sevilla.html, tal cual viene definido en la
+     ontología/PID) — aquí se usan solo 9 de esos 21 valores, los que Federico pidió expresamente.
+     Fuente de verdad por ficha: r.tipoTurista (el array que se rellena a mano en el panel de
+     edición). Para las fichas que TODAVÍA no lo tienen relleno (la mayoría, a día de hoy), se
+     calcula aquí una sugerencia automática a partir de su categoría/clase (classCode), SOLO para
+     que aparezcan agrupadas de entrada — es una estimación, no un dato verificado, y en cuanto
+     Federico rellene "Tipo de turista" en una ficha concreta, esa pasa a mandar sobre la
+     estimación automática. Ojo: "Urbano" e "Idiomático" no tienen ninguna clase de la ontología
+     que los identifique con fiabilidad (no hay una subclase tipo "escuela de español" o "atractivo
+     urbano genérico" en el listado), así que esas dos NO reciben sugerencia automática — solo
+     aparecerán fichas ahí cuando alguien las etiquete a mano. Mejor así que forzar una suposición
+     poco fiable en un catálogo público. */
+  var TOURIST_TYPE_BUCKETS = [
+    {key:"compras", short:"Compras", label:"Turismo de compras"},
+    {key:"urbano", short:"Urbano", label:"Turismo urbano"},
+    {key:"cultural", short:"Cultural y patrimonial", label:"Turismo cultural y patrimonial"},
+    {key:"mice", short:"MICE", label:"Turismo de negocio o MICE"},
+    {key:"gastronomico", short:"Gastronómico", label:"Turismo gastronómico"},
+    {key:"religioso", short:"Religioso", label:"Turismo religioso"},
+    {key:"idiomatico", short:"Idiomático", label:"Turismo idiomático"},
+    {key:"educativo", short:"Educativo", label:"Turismo educativo"},
+    {key:"deportivo", short:"Deportivo", label:"Turismo deportivo"}
+  ];
+  var CLASS_TOURIST_TYPE_MAP = {
+    // Gastronómico
+    Bar:["gastronomico"], WineBar:["gastronomico"], Winery:["gastronomico"], CafeOrCoffeeShop:["gastronomico"],
+    TakeAwayEstablishment:["gastronomico"], Brewery:["gastronomico"], ChillOut:["gastronomico"], ChocolateShop:["gastronomico"],
+    ChurroShop:["gastronomico"], CocktailBar:["gastronomico"], enoteca:["gastronomico"], IceCreamShop:["gastronomico"],
+    GastronomicMarket:["gastronomico"], Inn:["gastronomico"], BakeryAndPastry:["gastronomico"], Pub:["gastronomico"],
+    Restaurant:["gastronomico"], CateringService:["gastronomico"], Tavern:["gastronomico"], TeaRoom:["gastronomico"],
+    FoodEstablishment:["gastronomico"], GastronomicResource:["gastronomico"], BeachBar:["gastronomico"], FoodStall:["gastronomico"],
+    CiderBar:["gastronomico"], OliveOilMill:["gastronomico"], UndergroundWineCellar:["gastronomico"], Terroir:["gastronomico"],
+    Vineyard:["gastronomico"], WineShop:["gastronomico"], FoodAndBeverageService:["gastronomico"], RestaurantCompany:["gastronomico"],
+    GroceriesService:["gastronomico"],
+    // Cultural y patrimonial (varias de estas son a la vez edificios religiosos -> también "religioso")
+    Alcazar:["cultural"], Amphitheatre:["cultural"], ArcheologicalSite:["cultural"], Arch:["cultural"],
+    VernacularArchitecture:["cultural"], Auditorium:["cultural"], Basilica:["cultural","religioso"], Library:["cultural"],
+    BellTower:["cultural","religioso"], Chapel:["cultural","religioso"], Castle:["cultural"], Catacomb:["cultural"],
+    Cathedral:["cultural","religioso"], CultureCentre:["cultural"], InterpretationCentre:["cultural"], Cloister:["cultural","religioso"],
+    TouristAttractionSite:["cultural"], Convent:["cultural","religioso"], OrnamentalFountain:["cultural"], ArtGallery:["cultural"],
+    Church:["cultural","religioso"], LeisureAndCultureFacility:["cultural"], Mosque:["cultural","religioso"], Minaret:["cultural","religioso"],
+    UrbanViewPoint:["cultural"], Monastery:["cultural","religioso"], Monument:["cultural"], Wall:["cultural"], Museum:["cultural"],
+    Palace:["cultural"], Square:["cultural"], BullRing:["cultural"], Bridge:["cultural"], HistoricalOrCulturalResource:["cultural"],
+    ExhibitionHall:["cultural"], Sanctuary:["cultural","religioso"], Synagogue:["cultural","religioso"], Tower:["cultural"],
+    Garden:["cultural"], Quarter:["cultural"], OldTown:["cultural"], Aqueduct:["cultural"], ArabicBath:["cultural"],
+    VineyardHouse:["cultural"], WinePress:["cultural"], TownHall:["cultural"],
+    // Deportivo
+    FootballField:["deportivo"], GolfCourse:["deportivo"], ShootingRange:["deportivo"], BasketballCourt:["deportivo"],
+    "centro de actividades multiaventura":["deportivo"], EquestrianClub:["deportivo"], WinterSportsResort:["deportivo"],
+    Stadium:["deportivo"], Gym:["deportivo"], SportFacility:["deportivo"], SwimmingPool:["deportivo"], RunningTrack:["deportivo"],
+    SkatingRink:["deportivo"], PaddleCourt:["deportivo"], TennisCourt:["deportivo"], SportsCentre:["deportivo"],
+    ClimbingWall:["deportivo"], Racetrack:["deportivo"], SkatePark:["deportivo"], skatepark:["deportivo"], YatchingHarbour:["deportivo"],
+    AdventureActivityCentre:["deportivo"], AdventureActivity:["deportivo"], KartsCircuit:["deportivo"], EngineCircuit:["deportivo"],
+    // Compras
+    Bazaar:["compras"], ShoppingMall:["compras"], "comercio y moda":["compras"], TobaccoShop:["compras"],
+    JewelryAndWatches:["compras"], ToyStore:["compras"], Bookshop:["compras"], TraditionalMarket:["compras"],
+    Hairdressing:["compras"], Perfumery:["compras"], Kiosk:["compras"], TailorShop:["compras"], "servicios varios":["compras"],
+    Supermarket:["compras"], "tienda de accesorios y co":["compras"], Handicrafts:["compras"], Clothing:["compras"],
+    Souvenir:["compras"], TelephoneShop:["compras"], GeneralStore:["compras"], DryCleaningOrLaundry:["compras"],
+    SportingGoodsStore:["compras"], PetShop:["compras"], RetailAndFashionBusiness:["compras"], "alimentación":["compras"],
+    // Educativo
+    EducationalCentre:["educativo"], EducationalFacility:["educativo"], Campsite:["educativo"], FarmSchool:["educativo"],
+    // MICE
+    CongressCentre:["mice"], ConventionCentre:["mice"], EventAttendanceFacility:["mice"], Fairground:["mice"],
+    EventOrganisationCompany:["mice"], PartyAndEntertainmentFacility:["mice"]
+  };
+  var TOURIST_TYPE_KEY_BY_LABEL = {}; TOURIST_TYPE_BUCKETS.forEach(function(b){ TOURIST_TYPE_KEY_BY_LABEL[b.label]=b.key; });
+  /* Devuelve las claves (de las 9 de arriba) que aplican a una ficha. Si "Tipo de turista" ya está
+     rellenado a mano en la ficha (r.tipoTurista), manda ese dato — se traduce cada etiqueta al
+     código de la casilla correspondiente, ignorando las otras 12 categorías de la ontología que no
+     se usan en este catálogo. Si está vacío, se recurre a la sugerencia automática por classCode
+     (ver comentario más arriba sobre CLASS_TOURIST_TYPE_MAP). */
+  function inferTouristTypeKeys(r){
+    if(Array.isArray(r.tipoTurista) && r.tipoTurista.length){
+      return r.tipoTurista.map(function(lbl){ return TOURIST_TYPE_KEY_BY_LABEL[lbl]; }).filter(Boolean);
+    }
+    var keys = (CLASS_TOURIST_TYPE_MAP[r.classCode] || []).slice();
+    if(r.pool === "religioso" && keys.indexOf("religioso") === -1) keys.push("religioso");
+    return keys;
+  }
   function poolLabel(id){ var p=POOLS.filter(function(x){return x.id===id;})[0]; return p?p.label:id; }
   function formatAddress(r){
     var line = [r.street, r.number].filter(Boolean).join(", ");
@@ -219,7 +301,7 @@
     tag: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 12-8 8-9-9V4h7l10 8Z"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/></svg>'
   };
 
-  function recordCardHtml(r, chipClass, cardClassLabel){
+  function recordCardHtml(r, chipClass, touristTypeKeys){
     var ci = classInfo(r.pool, r.classCode);
     var tags = (r.attributes||[]).map(attrLabel);
     var addr = formatAddress(r);
@@ -232,7 +314,7 @@
     var extraImgs = (r.additionalImages||[]).filter(Boolean);
     var galleryHtml = extraImgs.length ?
       '<div class="gallery-strip">'+extraImgs.map(function(u){ return '<img class="card-img-thumb" src="'+esc(normalizeImgUrl(u))+'" alt="" loading="lazy">'; }).join("")+'</div>' : "";
-    return '<article class="card" data-cardclass="'+esc(cardClassLabel||"")+'" data-recordid="'+esc(r.id)+'">'+
+    return '<article class="card" data-touristtypes="'+esc(touristTypeKeys||"")+'" data-recordid="'+esc(r.id)+'">'+
       (r.mainImage?'<img class="card-img" src="'+esc(normalizeImgUrl(r.mainImage))+'" alt="" loading="lazy">':'')+
       galleryHtml+
       '<header><h3>'+esc(r.name||"(sin nombre)")+'</h3>'+
@@ -361,12 +443,16 @@
     var socialLinks = (r.socialMedia||[]).filter(function(s){return s.platform||s.handle;})
       .map(function(s){ return '<span class="tag">'+esc(s.platform||"")+(s.handle?': '+esc(s.handle):'')+'</span>'; }).join("");
     var tags = (r.attributes||[]).map(attrLabel);
+    var touristTypeChips = inferTouristTypeKeys(r).map(function(k){
+      var b = TOURIST_TYPE_BUCKETS.filter(function(x){return x.key===k;})[0];
+      return b ? '<span class="chip neutral">'+esc(b.short)+'</span>' : '';
+    }).join("");
     return (r.mainImage?'<div class="detail-hero"><img src="'+esc(normalizeImgUrl(r.mainImage))+'" alt="" loading="lazy"><button type="button" class="detail-close" id="detailCloseBtn" title="Cerrar" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>'
       : '<div style="padding:16px 24px 0;text-align:right"><button type="button" class="detail-close" id="detailCloseBtn" style="position:static;background:var(--sv-surface-alt);color:var(--sv-ink)" title="Cerrar" aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>')+
       galleryHtml+
       '<div class="detail-body">'+
       '<div class="detail-head-row"><h1>'+esc(r.name||"(sin nombre)")+'</h1></div>'+
-      '<div class="card-chips" style="flex-direction:row;margin-bottom:12px"><span class="chip '+chipClass+'">'+esc(label)+'</span>'+(r.esReligioso?'<span class="chip carmesi">Turismo religioso</span>':'')+(r.esMice?'<span class="chip neutral">MICE</span>':'')+'</div>'+
+      '<div class="card-chips" style="flex-direction:row;flex-wrap:wrap;margin-bottom:12px"><span class="chip '+chipClass+'">'+esc(label)+'</span>'+(r.esReligioso?'<span class="chip carmesi">Turismo religioso</span>':'')+(r.esMice?'<span class="chip neutral">MICE</span>':'')+touristTypeChips+'</div>'+
       (r.description?'<p class="desc">'+esc(r.description)+'</p>':'')+
       '<dl>'+
         (addr?'<div><dt>'+ICONS.pin+'Dirección</dt><dd>'+esc(addr)+(hasCoords(r)?' · <a href="'+esc(mapsUrl(r))+'" target="_blank" rel="noopener">ver en el mapa</a>':'')+'</dd></div>':'')+
@@ -423,27 +509,24 @@
     records.forEach(function(r){ recordsById[r.id] = r; });
     var byPool = {};
     POOLS.forEach(function(p){ byPool[p.id] = records.filter(function(r){return r.pool===p.id;}); });
-    var classCounts = {}, classOrder = [];
-    records.forEach(function(r){
-      var ci = classInfo(r.pool, r.classCode);
-      var label = (ci ? ci.label : r.classLabel) || "Sin categoría";
-      if(classCounts[label]===undefined){ classCounts[label]=0; classOrder.push(label); }
-      classCounts[label]++;
-    });
-    classOrder.sort(function(a,b){ return classCounts[b]-classCounts[a] || a.localeCompare(b,"es"); });
+    /* Navegación principal por "tipo de turista" (30/08/2026, a petición de Federico), en vez de por
+       categoría/clase de la ontología. Un mismo recurso puede caer en más de un tipo a la vez (p.ej.
+       una catedral es "Cultural y patrimonial" y "Religioso"), así que el recuento por chip no tiene
+       por qué sumar el total de fichas — es normal. */
+    var typeCounts = {};
+    TOURIST_TYPE_BUCKETS.forEach(function(b){ typeCounts[b.key] = 0; });
+    records.forEach(function(r){ inferTouristTypeKeys(r).forEach(function(k){ if(typeCounts[k]!==undefined) typeCounts[k]++; }); });
     var filterBarHtml = '<div class="filter-bar" id="csFilterBar">'+
       '<button type="button" class="filter-chip active" data-filterclass="">Todas <span class="n">'+records.length+'</span></button>'+
-      classOrder.map(function(label){
-        return '<button type="button" class="filter-chip" data-filterclass="'+esc(label)+'">'+esc(label)+' <span class="n">'+classCounts[label]+'</span></button>';
+      TOURIST_TYPE_BUCKETS.map(function(b){
+        return '<button type="button" class="filter-chip" data-filterclass="'+esc(b.key)+'">'+esc(b.short)+' <span class="n">'+typeCounts[b.key]+'</span></button>';
       }).join("")+'</div>';
     function section(pool){
       var recs = byPool[pool];
       if(!recs.length) return "";
       var chipClass = pool==="organizacion"?"albero":"neutral";
       var rows = recs.map(function(r){
-        var ci = classInfo(r.pool, r.classCode);
-        var label = (ci ? ci.label : r.classLabel) || "Sin categoría";
-        return recordCardHtml(r, chipClass, label);
+        return recordCardHtml(r, chipClass, inferTouristTypeKeys(r).join(" "));
       }).join("");
       return '<section data-poolsection="'+esc(pool)+'"><h2>'+esc(poolLabel(pool))+' <span class="count">'+recs.length+'</span></h2><div class="cards">'+rows+'</div></section>';
     }
@@ -459,7 +542,8 @@
       bar.querySelectorAll(".filter-chip").forEach(function(b){ b.classList.toggle("active", b===btn); });
       var wanted = btn.getAttribute("data-filterclass");
       content.querySelectorAll(".card").forEach(function(card){
-        var show = !wanted || card.getAttribute("data-cardclass")===wanted;
+        var types = (card.getAttribute("data-touristtypes")||"").split(" ");
+        var show = !wanted || types.indexOf(wanted) !== -1;
         card.style.display = show ? "" : "none";
       });
       content.querySelectorAll("section[data-poolsection]").forEach(function(sec){
